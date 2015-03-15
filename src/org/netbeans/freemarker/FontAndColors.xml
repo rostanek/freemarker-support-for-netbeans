@@ -1,0 +1,20 @@
+<!DOCTYPE fontscolors PUBLIC
+    "-//NetBeans//DTD Editor Fonts and Colors settings 1.1//EN"
+    "https://netbeans.org/dtds/EditorFontsColors-1_1.dtd">
+<fontscolors>
+<!--    <fontcolor name="character" default="char"/>-->
+    <fontcolor name="comment" default="comment"/>
+    <fontcolor name="directive" default="directive" foreColor="red" />
+    <fontcolor name="errors" default="error"/>
+    <fontcolor name="identifier" default="identifier"/>
+    <fontcolor name="interpolation" default="identifier" foreColor="orange"/>
+    <fontcolor name="keyword" default="keyword" />
+    <fontcolor name="literal" default="keyword" foreColor="blue" />
+    <fontcolor name="number" default="number"/>
+    <fontcolor name="operator" default="operator"/>
+    <fontcolor name="separator" default="separator"/>
+    <fontcolor name="string" default="string"/>
+    <fontcolor name="braces" default="statement" foreColor="orange"/>
+    <fontcolor name="whitespace" default="whitespace"/>
+    
+</fontscolors>

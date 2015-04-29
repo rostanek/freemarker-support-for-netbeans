@@ -28,6 +28,9 @@ public class FTLParser extends Parser {
     @Override
     public void parse(Snapshot snapshot, Task task, SourceModificationEvent event) {
         this.snapshot = snapshot;
+        if (true) {
+            return;
+        }
         Reader reader = new StringReader(snapshot.getText().toString());
         freemarkerParser = new FMParser(reader);
         exceptions.clear();

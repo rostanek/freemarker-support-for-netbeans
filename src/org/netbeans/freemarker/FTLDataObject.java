@@ -94,7 +94,7 @@ public class FTLDataObject extends MultiDataObject {
         return 1;
     }
 
-    @Messages("LBL_FTL_EDITOR=Source")
+    @Messages({"LBL_FTL_EDITOR=Source"})
     @MultiViewElement.Registration(
             displayName = "#LBL_FTL_EDITOR",
             iconBase = "org/netbeans/freemarker/dot.png",

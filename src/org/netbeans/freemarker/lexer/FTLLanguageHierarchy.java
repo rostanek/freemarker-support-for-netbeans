@@ -162,7 +162,7 @@ public class FTLLanguageHierarchy extends LanguageHierarchy<FTLTokenId> {
                     new FTLTokenId("TERSE_COMMENT_END", "comment", FMParserConstants.TERSE_COMMENT_END),
                     new FTLTokenId("MAYBE_END", "comment", FMParserConstants.MAYBE_END),
                     new FTLTokenId("KEEP_GOING", "comment", FMParserConstants.KEEP_GOING),
-                    new FTLTokenId("LONE_LESS_THAN_OR_DASH", "keyword", FMParserConstants.LONE_LESS_THAN_OR_DASH),
+                    new FTLTokenId("LONE_LESS_THAN_OR_DASH", "comment", FMParserConstants.LONE_LESS_THAN_OR_DASH),
                     
                     
                     

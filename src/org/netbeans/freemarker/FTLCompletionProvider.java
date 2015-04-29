@@ -37,12 +37,14 @@ public class FTLCompletionProvider implements CompletionProvider {
                 
                 String filter = null;
                 int startOffset = caretOffset - 1;
+                String currentLine = null;
                 String text = "";
                 try {
                     final StyledDocument bDoc = (StyledDocument) document;
                     text = bDoc.getText(0, bDoc.getLength());
                     final int lineStartOffset = getRowFirstNonWhite(bDoc, caretOffset);
                     final char[] line = bDoc.getText(lineStartOffset, caretOffset - lineStartOffset).toCharArray();
+                    currentLine = String.valueOf(line);
                     final int whiteOffset = indexOfWhite(line);
                     filter = new String(line, whiteOffset + 1, line.length - whiteOffset - 1);
                     if (whiteOffset > 0) {
@@ -73,6 +75,10 @@ public class FTLCompletionProvider implements CompletionProvider {
                             }
                         }
                     }
+                }
+                if (currentLine.matches("(<|\\[)#ftl ")) {
+                    completionResultSet.addItem(new FTLCompletionItem("encoding", startOffset + 2, caretOffset));
+                    completionResultSet.addItem(new FTLCompletionItem("strip_whitespace", startOffset + 2, caretOffset));
                 }
                 completionResultSet.finish();
             }

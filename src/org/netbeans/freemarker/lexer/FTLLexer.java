@@ -65,9 +65,10 @@ class FTLLexer implements Lexer<FTLTokenId> {
             System.out.println("EOF returning null");
             return null;
         }
-        if (token.image.equals("-->;")) {
+        if ((token.kind == FMParserConstants.TERSE_COMMENT_END || token.kind == FMParserConstants.MAYBE_END) && token.image.endsWith(";")) {
             // this is because of weird hacks in FTL.jj
-            token.image = "-->";
+            System.out.println("trimming ; at the end of token image");
+            token.image = token.image.substring(0, token.image.length() - 1);
         }
         int length = token.image.length();
         

@@ -8,7 +8,7 @@ import org.netbeans.spi.lexer.LexerInput;
 import org.netbeans.spi.lexer.LexerRestartInfo;
 
 import freemarker.core.FMParserConstants;
-import freemarker.core.FMParserTokenManager;
+import freemarker.core.FMParserWSTokenManager;
 import freemarker.core.SimpleCharStream;
 import freemarker.core.Token;
 import freemarker.core.TokenMgrError;
@@ -20,7 +20,7 @@ import freemarker.core.TokenMgrError;
 class FTLLexer implements Lexer<FTLTokenId> {
 
     private LexerRestartInfo<FTLTokenId> info;
-    private FMParserTokenManager fmParserTokenManager;
+    private FMParserWSTokenManager fmParserTokenManager;
 
     public FTLLexer(LexerRestartInfo<FTLTokenId> info) {
         this.info = info;
@@ -30,7 +30,7 @@ class FTLLexer implements Lexer<FTLTokenId> {
             @Override
             public int read() throws IOException {
                 int result = input.read();
-                //System.out.println("read " + result);
+                //debug("read " + result);
                 //if (result == LexerInput.EOF) {
                 //    throw new IOException("LexerInput EOF");
                 //}
@@ -38,7 +38,7 @@ class FTLLexer implements Lexer<FTLTokenId> {
             }
         };
         SimpleCharStream stream = new SimpleCharStream(istream);
-        fmParserTokenManager = new FMParserTokenManager(stream);
+        fmParserTokenManager = new FMParserWSTokenManager(stream);
     }
 
     @Override
@@ -48,26 +48,26 @@ class FTLLexer implements Lexer<FTLTokenId> {
             token = fmParserTokenManager.getNextToken();
 
         } catch (TokenMgrError err) {
-            System.out.println(err.getMessage());
+            debug(err.getMessage());
             err.printStackTrace();
             return null;
         }
         FTLTokenId tokenId = FTLLanguageHierarchy.getToken(token.kind);
-        System.out.println(tokenId + " " + token.image);
+        debug(tokenId + " " + token.image);
         //if (info.input().readLength() < 1) {
         //    return null;
         //}
         if (token.kind == FMParserConstants.EOF) {
-            System.out.println(info.input().readLength());
+            debug(info.input().readLength());
             //while (info.input().readLength() > 0) {
             //    info.input().read();
             //}
-            System.out.println("EOF returning null");
+            debug("EOF returning null");
             return null;
         }
         if ((token.kind == FMParserConstants.TERSE_COMMENT_END || token.kind == FMParserConstants.MAYBE_END) && token.image.endsWith(";")) {
             // this is because of weird hacks in FTL.jj
-            System.out.println("trimming ; at the end of token image");
+            debug("trimming ; at the end of token image");
             token.image = token.image.substring(0, token.image.length() - 1);
         }
         int length = token.image.length();
@@ -87,4 +87,7 @@ class FTLLexer implements Lexer<FTLTokenId> {
     public void release() {
     }
 
+	private void debug(Object s) {
+		//System.out.println(s);
+	}
 }

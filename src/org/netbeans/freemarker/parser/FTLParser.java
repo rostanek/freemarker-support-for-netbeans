@@ -8,6 +8,9 @@ import java.util.List;
 import javax.swing.event.ChangeListener;
 
 import freemarker.core.FMParser;
+import freemarker.core.ParseException;
+import freemarker.template.Template;
+import java.io.IOException;
 
 import org.netbeans.modules.csl.api.Error;
 import org.netbeans.modules.csl.spi.ParserResult;
@@ -17,66 +20,57 @@ import org.netbeans.modules.parsing.spi.Parser;
 import org.netbeans.modules.parsing.spi.Parser.Result;
 import org.netbeans.modules.parsing.spi.SourceModificationEvent;
 
-import freemarker.core.ParseException;
 
 public class FTLParser extends Parser {
 
     private Snapshot snapshot;
     private FMParser freemarkerParser;
-    private List<ParseException> exceptions = new ArrayList<ParseException>();
+	private final List<ParseException> errors = new ArrayList<ParseException>();
 
     @Override
-    public void parse(Snapshot snapshot, Task task, SourceModificationEvent event) {
+    public void parse (Snapshot snapshot, Task task, SourceModificationEvent event) {
         this.snapshot = snapshot;
-        if (true) {
-            return;
-        }
+		errors.clear();
         Reader reader = new StringReader(snapshot.getText().toString());
-        freemarkerParser = new FMParser(reader);
-        exceptions.clear();
-        try {
-            freemarkerParser.Root();
-        } catch (ParseException ex) {
-            if (ex.currentToken != null) {
-                exceptions.add(ex);
-            }
-        }
+		try {
+			Template tpl = new Template(snapshot.getSource().getFileObject().getNameExt(), reader);
+		    freemarkerParser = new FMParser(tpl, reader, false, false);
+			freemarkerParser.Root();
+		} catch (ParseException ex) {
+			errors.add(ex);
+			//ex.printStackTrace();
+		} catch (IOException ex) {
+			//ex.printStackTrace();
+		}
     }
 
     @Override
-    public Result getResult(Task task) {
-        return new FTLParserResult(snapshot, /*freemarkerParser,*/ exceptions);
+    public Result getResult (Task task) {
+        return new FTLParserResult (snapshot, errors);
     }
 
     @Override
-    public void addChangeListener(ChangeListener changeListener) {
+    public void addChangeListener (ChangeListener changeListener) {
     }
 
     @Override
-    public void removeChangeListener(ChangeListener changeListener) {
+    public void removeChangeListener (ChangeListener changeListener) {
     }
 
+    
     public static class FTLParserResult extends ParserResult {
 
-//        private FMParser fmParser;
-        private List<ParseException> exceptions;
+        private final List<ParseException> errors;
         private boolean valid = true;
 
-        FTLParserResult(Snapshot snapshot, /*FMParser fmParser,*/ List<ParseException> exceptions) {
-            super(snapshot);
-//            this.fmParser = fmParser;
-            this.exceptions = exceptions;
+        FTLParserResult (Snapshot snapshot, List<ParseException> errors) {
+            super (snapshot);
+            this.errors = errors;
+			valid = errors.isEmpty();
         }
 
-//        public FMParser getFMParser() throws org.netbeans.modules.parsing.spi.ParseException {
-//            if (!valid) {
-//                throw new org.netbeans.modules.parsing.spi.ParseException();
-//            }
-//            return fmParser;
-//        }
-
-        public List<ParseException> getExceptions() {
-            return exceptions;
+        public List<ParseException> getErrors() {
+			return errors;
         }
 
         @Override
@@ -90,5 +84,5 @@ public class FTLParser extends Parser {
         }
 
     }
-
+    
 }

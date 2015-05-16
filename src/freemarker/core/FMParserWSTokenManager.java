@@ -6,7 +6,7 @@ import freemarker.template.utility.DeepUnwrap;
 import java.io.*;
 import java.util.*;
 
-public class FMParserTokenManager implements FMParserConstants
+public class FMParserWSTokenManager implements FMParserConstants
 {
     private static final String PLANNED_DIRECTIVE_HINT
             = "(If you have seen this directive in use elsewhere, this was a planned directive, "
@@ -24,7 +24,7 @@ public class FMParserTokenManager implements FMParserConstants
      * Keeps track of how deeply nested we have the hash literals. This is necessary since we need to be able to
      * distinguish the } used to close a hash literal and the one used to close a ${
      */
-    private FMParser parser;
+    private FMParserWS parser;
     private int hashLiteralNesting;
     private int parenthesisNesting;
     private int bracketNesting;
@@ -37,7 +37,7 @@ public class FMParserTokenManager implements FMParserConstants
             inInvocation;
     int incompatibleImprovements;
 
-    void setParser(FMParser parser) {
+    void setParser(FMParserWS parser) {
         this.parser = parser;
     }
 
@@ -7291,13 +7291,13 @@ StringBuffer image;
 int jjimageLen;
 int lengthOfMatch;
 protected char curChar;
-public FMParserTokenManager(SimpleCharStream stream)
+public FMParserWSTokenManager(SimpleCharStream stream)
 {
    if (SimpleCharStream.staticFlag)
       throw new Error("ERROR: Cannot use a static CharStream class with a non-static lexical analyzer.");
    input_stream = stream;
 }
-public FMParserTokenManager(SimpleCharStream stream, int lexState)
+public FMParserWSTokenManager(SimpleCharStream stream, int lexState)
 {
    this(stream);
    SwitchTo(lexState);

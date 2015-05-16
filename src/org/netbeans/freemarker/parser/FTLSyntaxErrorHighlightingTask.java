@@ -28,23 +28,24 @@ public class FTLSyntaxErrorHighlightingTask extends ParserResultTask {
     @Override
     public void run (Result result, SchedulerEvent event) {
         try {
-            FTLParserResult ftlResult = (FTLParserResult) result;
+            FTLParserResult sjResult = (FTLParserResult) result;
+            List<ParseException> syntaxErrors = sjResult.getErrors();
             Document document = result.getSnapshot ().getSource ().getDocument (false);
             List<ErrorDescription> errors = new ArrayList<ErrorDescription> ();
-            for (ParseException syntaxError : ftlResult.getExceptions()) {
+            for (ParseException syntaxError : syntaxErrors) {
                 Token token = syntaxError.currentToken;
-                if (token.beginLine == 0 && token.next != null) {
-                    token = token.next; // workaround for unexprected #else
-                }
-                int start = NbDocument.findLineOffset ((StyledDocument) document, token.beginLine - 1) + token.beginColumn - 1;
-                int end = NbDocument.findLineOffset ((StyledDocument) document, token.endLine - 1) + token.endColumn;
-                ErrorDescription errorDescription = ErrorDescriptionFactory.createErrorDescription(
-                    Severity.ERROR,
-                    syntaxError.getMessage (),
-                    document,
-                    document.createPosition(start),
-                    document.createPosition(end)
-                );
+				int start = 0, end = 0;
+				//if (token != null) {
+					start = NbDocument.findLineOffset ((StyledDocument) document, syntaxError.lineNumber - 1) + syntaxError.columnNumber - 1;
+					end = NbDocument.findLineOffset ((StyledDocument) document, syntaxError.endLineNumber - 1) + syntaxError.endColumnNumber;
+				//}
+				ErrorDescription errorDescription = ErrorDescriptionFactory.createErrorDescription(
+					Severity.ERROR,
+					syntaxError.getMessage (),
+					document,
+					document.createPosition(start),
+					document.createPosition(end)
+				);
                 errors.add (errorDescription);
             }
             HintsController.setErrors (document, "freemarker", errors);

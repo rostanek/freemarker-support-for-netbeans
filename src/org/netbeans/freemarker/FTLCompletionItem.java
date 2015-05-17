@@ -24,6 +24,7 @@ import org.openide.util.ImageUtilities;
 public class FTLCompletionItem implements CompletionItem {
 
     private String text;
+    private String suffix = "";
     private int caretOffset;
     private int dotOffset;
     
@@ -36,12 +37,19 @@ public class FTLCompletionItem implements CompletionItem {
         this.dotOffset = dotOffset;
     }
 
+    public FTLCompletionItem(String text, String suffix, int dotOffset, int caretOffset) {
+        this.text = text;
+        this.suffix = suffix;
+        this.caretOffset = caretOffset;
+        this.dotOffset = dotOffset;
+    }
+
     @Override
     public void defaultAction(JTextComponent jtc) {
         try {
             StyledDocument doc = (StyledDocument) jtc.getDocument();
             doc.remove(dotOffset, caretOffset - dotOffset);
-            doc.insertString(dotOffset, text, null);
+            doc.insertString(dotOffset, text + suffix, null);
             if (text.equals("if")) {
                 doc.insertString(dotOffset + 2, " >\n\n</#if>\n", null);
             }

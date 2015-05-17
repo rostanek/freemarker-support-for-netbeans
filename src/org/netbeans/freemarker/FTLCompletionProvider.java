@@ -24,7 +24,9 @@ import org.openide.util.Exceptions;
 @MimeRegistration(mimeType = "text/x-ftl", service = CompletionProvider.class)
 public class FTLCompletionProvider implements CompletionProvider {
 
-    private String[] directives = "assign attempt break case compress default else elseif escape fallback function flush ftl global if import include list local lt macro nested noescape noparse nt recover recurse return rt setting stop switch t visit ".split(" ");
+    private final String[] directives = "assign attempt break case compress default else elseif escape fallback function flush ftl global if import include list local lt macro nested noescape noparse nt recover recurse return rt setting stop switch t visit ".split(" ");
+    private final String[] ftlParameters = "encoding strip_whitespace strip_text strict_syntax ns_prefixes attributes".split(" ");
+    private final String[] settingNames = "locale number_format boolean_format date_format time_format datetime_format time_zone sql_date_and_time_time_zone url_escaping_charset output_encoding classic_compatible".split(" ");
 
     @Override
     public CompletionTask createTask(int queryType, JTextComponent jtc) {
@@ -54,6 +56,7 @@ public class FTLCompletionProvider implements CompletionProvider {
                     }
                 } catch (BadLocationException ex) {
                     Exceptions.printStackTrace(ex);
+                    return;
                 }
                 
                 if (filter != null) {
@@ -74,11 +77,24 @@ public class FTLCompletionProvider implements CompletionProvider {
                                 completionResultSet.addItem(new FTLCompletionItem(group1, startOffset + 2, caretOffset));
                             }
                         }
+                        pattern = Pattern.compile("<#import\\s.+\\sas\\s+(\\w+)");
+                        matcher = pattern.matcher(text);
+                        while (matcher.find()) {
+                            String group1 = matcher.group(1);
+                            if (group1.startsWith(filter)) {
+                                completionResultSet.addItem(new FTLCompletionItem(group1, startOffset + 2, caretOffset));
+                            }
+                        }
                     }
                 }
-                if (currentLine.matches("(<|\\[)#ftl ")) {
-                    completionResultSet.addItem(new FTLCompletionItem("encoding", startOffset + 2, caretOffset));
-                    completionResultSet.addItem(new FTLCompletionItem("strip_whitespace", startOffset + 2, caretOffset));
+                if (currentLine.matches("(<|\\[)#ftl\\s+")) {
+                    for (String param : ftlParameters) {
+                        completionResultSet.addItem(new FTLCompletionItem(param, "=", startOffset, caretOffset));
+                    }
+                } else if (currentLine.matches(".*(<|\\[)#setting\\s+")) {
+                    for (String param : settingNames) {
+                        completionResultSet.addItem(new FTLCompletionItem(param, "=", startOffset, caretOffset));
+                    }
                 }
                 completionResultSet.finish();
             }

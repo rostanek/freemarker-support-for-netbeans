@@ -50,7 +50,8 @@ class FTLLexer implements Lexer<FTLTokenId> {
         } catch (TokenMgrError err) {
             debug(err.getMessage());
             err.printStackTrace();
-            return null;
+            // fictional token to stop further lexing in case of exception
+            return info.tokenFactory().createToken(FTLLanguageHierarchy.getToken(FMParserConstants.STATIC_TEXT_NON_WS), info.input().readLength());
         }
         FTLTokenId tokenId = FTLLanguageHierarchy.getToken(token.kind);
         debug(tokenId + " " + token.image);

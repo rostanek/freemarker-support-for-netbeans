@@ -21,6 +21,7 @@ class FTLLexer implements Lexer<FTLTokenId> {
 
     private LexerRestartInfo<FTLTokenId> info;
     private FMParserWSTokenManager fmParserTokenManager;
+    private boolean errorOccured = false;
 
     public FTLLexer(LexerRestartInfo<FTLTokenId> info) {
         this.info = info;
@@ -43,17 +44,22 @@ class FTLLexer implements Lexer<FTLTokenId> {
 
     @Override
     public org.netbeans.api.lexer.Token<FTLTokenId> nextToken() {
+        if (errorOccured) {
+            return null;
+        }
         Token token;
         try {
             token = fmParserTokenManager.getNextToken();
 
         } catch (TokenMgrError err) {
+            errorOccured = true;
             debug(err.getMessage());
-            err.printStackTrace();
+            //err.printStackTrace();
             // fictional token to stop further lexing in case of exception
             return info.tokenFactory().createToken(FTLLanguageHierarchy.getToken(FMParserConstants.STATIC_TEXT_NON_WS), info.input().readLength());
         }
         FTLTokenId tokenId = FTLLanguageHierarchy.getToken(token.kind);
+        //debug(token.beginLine + ":" + token.beginColumn + " " + token.endLine + ":" + token.endColumn);
         debug(tokenId + " " + token.image);
         //if (info.input().readLength() < 1) {
         //    return null;

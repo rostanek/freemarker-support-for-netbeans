@@ -33,12 +33,9 @@ public class FTLSyntaxErrorHighlightingTask extends ParserResultTask {
             Document document = result.getSnapshot ().getSource ().getDocument (false);
             List<ErrorDescription> errors = new ArrayList<ErrorDescription> ();
             for (ParseException syntaxError : syntaxErrors) {
-                Token token = syntaxError.currentToken;
-				int start = 0, end = 0;
-				//if (token != null) {
-					start = NbDocument.findLineOffset ((StyledDocument) document, syntaxError.lineNumber - 1) + syntaxError.columnNumber - 1;
-					end = NbDocument.findLineOffset ((StyledDocument) document, syntaxError.endLineNumber - 1) + syntaxError.endColumnNumber;
-				//}
+                int start = NbDocument.findLineOffset ((StyledDocument) document, syntaxError.lineNumber - 1) + syntaxError.columnNumber - 1;
+                int end = NbDocument.findLineOffset ((StyledDocument) document, syntaxError.endLineNumber - 1) + syntaxError.endColumnNumber;
+
 				ErrorDescription errorDescription = ErrorDescriptionFactory.createErrorDescription(
 					Severity.ERROR,
 					syntaxError.getMessage (),

@@ -160,10 +160,10 @@ public class SimpleCharStream
         case '\n' :
            prevCharIsLF = true;
            break;
-        case '\t' :
-           column--;
-           column += (8 - (column & 07));
-           break;
+        //case '\t' :
+           //column--;
+           //column += (8 - (column & 07)); // this caused problems in highlighting errors
+           //break;
         default :
            break;
      }

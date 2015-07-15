@@ -1,37 +1,27 @@
-<#assign name=value>
-or
-<#assign name1=value1 name2=value2 ... nameN=valueN>
-or
-<#assign same as above... in namespacehash>
-or
-<#assign name>
-  capture this
-</#assign>
-or
-<#assign name in namespacehash>
-  capture this
-</#assign>
+<#ftl strip_whitespace = true>
 
-<#if condition>
-  ...
-<#elseif condition2>
-  ...
-<#elseif condition3>
-  ...
-...
-<#else>
-  ...
-</#if>
-
+<#setting boolean_format=computer>
 <#import "/libs/mylib.ftl" as my>
 
-<#list seq as x>
-  ${x_index + 1}. ${x}<#if x_has_next>,</#if>
-</#list>
+<#assign charset="UTF-8">
+<#assign title="Example">
+<#assign content>
+This is content
+</#assign>
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>${title}</title>
+		<meta charset="${charset}">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	</head>
+	<body><#if content??>
+		<div>${content}</div>
+		<#else>
+		<div>No content</div>
+		</#if>
+		<@my.function>parameter</@my.function>
+		
 
-<@html_escape>
-  a < b
-  Romeo & Juliet
-</@html_escape>  
-
-<#-- comment -->
+	</body>
+</html>

@@ -29,7 +29,7 @@ public class FTLCompletionItem implements CompletionItem {
     private int dotOffset;
     
     private static ImageIcon fieldIcon =
-        new ImageIcon(ImageUtilities.loadImage("org/netbeans/freemarker/dot.png"));
+        new ImageIcon(ImageUtilities.loadImage("org/netbeans/freemarker/icon.png"));
 
     public FTLCompletionItem(String text, int dotOffset, int caretOffset) {
         this.text = text;

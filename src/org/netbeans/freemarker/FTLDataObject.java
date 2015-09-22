@@ -26,7 +26,7 @@ import org.openide.windows.TopComponent;
 )
 @DataObject.Registration(
         mimeType = "text/x-ftl",
-        iconBase = "org/netbeans/freemarker/dot.png",
+        iconBase = "org/netbeans/freemarker/icon.png",
         displayName = "#LBL_FTL_LOADER",
         position = 300
 )
@@ -97,7 +97,7 @@ public class FTLDataObject extends MultiDataObject {
     @Messages({"LBL_FTL_EDITOR=Source"})
     @MultiViewElement.Registration(
             displayName = "#LBL_FTL_EDITOR",
-            iconBase = "org/netbeans/freemarker/dot.png",
+            iconBase = "org/netbeans/freemarker/icon.png",
             mimeType = "text/x-ftl",
             persistenceType = TopComponent.PERSISTENCE_ONLY_OPENED,
             preferredID = "FTL",

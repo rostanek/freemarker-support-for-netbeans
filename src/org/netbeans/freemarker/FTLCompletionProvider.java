@@ -48,19 +48,19 @@ public class FTLCompletionProvider implements CompletionProvider {
             protected void query(CompletionResultSet completionResultSet, Document document, int caretOffset) {
                 
                 int lineStartOffset;
-                String filter = null;
+                String filter;
                 int startOffset = caretOffset - 1; // poczatek uzupelnianego slowa
-                String currentLine = null;
-                String text = "";
+                String currentLine;
+                String text;
                 try {
                     final StyledDocument bDoc = (StyledDocument) document;                    
                     text = bDoc.getText(0, bDoc.getLength());
                     lineStartOffset = getRowFirstNonWhite(bDoc, caretOffset); // poczatek bieżącej linii
                     currentLine = getCurrentLine(bDoc, caretOffset);
-                    System.out.println(currentLine);
+                    //System.out.println(currentLine);
                     final char[] line = bDoc.getText(lineStartOffset, caretOffset - lineStartOffset).toCharArray();
                     currentLine = String.valueOf(line); // tekst od poczatku linii do kursora
-                    System.out.println(currentLine);
+                    //System.out.println(currentLine);
                     final int whiteOffset = indexOfWhite(line); // ostatnia spacja
                     filter = new String(line, whiteOffset + 1, line.length - whiteOffset - 1); // uzupelniane slowo
                     if (whiteOffset > 0) {

@@ -32,11 +32,35 @@ public class FTLBracesMatcher implements BracesMatcher, BracesMatcherFactory {
     private int originOffset;
     private boolean forward;
 
-//    private static final int[] tokenPairs = new int[]{ATTEMPT, END_ATTEMPT,
-//        COMPRESS, END_COMPRESS, ESCAPE, END_ESCAPE, NOESCAPE, END_NOESCAPE,
-//        FOREACH, END_FOREACH, FUNCTION, END_FUNCTION, IF, END_IF, LIST, END_LIST,
-//        MACRO, END_MACRO, SWITCH, END_SWITCH
-//    };
+    private static final int[] startTags = new int[]{
+        ATTEMPT,
+        COMPRESS,
+        ESCAPE,
+        NOESCAPE,
+        FOREACH,
+        FUNCTION,
+        IF,
+        LIST,
+        MACRO,
+        SWITCH,
+        
+        UNIFIED_CALL
+    };
+
+    private static final int[] endTags = new int[]{
+        END_ATTEMPT,
+        END_COMPRESS,
+        END_ESCAPE,
+        END_NOESCAPE,
+        END_FOREACH,
+        END_FUNCTION,
+        END_IF,
+        END_LIST,
+        END_MACRO,
+        END_SWITCH,
+        
+        UNIFIED_CALL_END
+    };
 
     public FTLBracesMatcher() {
         this(null);
@@ -46,19 +70,14 @@ public class FTLBracesMatcher implements BracesMatcher, BracesMatcherFactory {
         matcherContext = mc;
     }
 
-//    private int findPair(int token) {
-//        
-//        for (int i = 0; i < tokenPairs.length; i++) {
-//            if (tokenPairs[i] == token) {
-//                if ((i & 1) == 1) { // odd ?
-//                    return i - 1;
-//                } else {
-//                    return i + 1;
-//                }
-//            }
-//        }
-//        return 0;
-//    }
+    private int indexOf(int[] array, int value) {
+        for (int i = 0; i < array.length; i++) {
+            if (array[i] == value) {
+                return i;
+            }
+        }
+        return -1;
+    }
 
     @Override
     public int[] findOrigin() throws InterruptedException, BadLocationException {
@@ -69,57 +88,24 @@ public class FTLBracesMatcher implements BracesMatcher, BracesMatcherFactory {
         if (!localList.isEmpty()) {
             final TokenSequence<? extends TokenId> ts = localList.get(localList.size() - 1);
             final Token<? extends TokenId> token = ts.offsetToken();
+            int tokenId = token.id().ordinal();
 
-            switch (token.id().ordinal()) {
-                case ELSE_IF:
-                case ELSE:
-//                case ASSIGN:
-//                case GLOBALASSIGN:
-//                case LOCALASSIGN:
-                case ATTEMPT:
-                case COMPRESS:
-                case ESCAPE:
-                case NOESCAPE:
-                case FOREACH:
-                case FUNCTION:
-                case IF:
-                case LIST:
-                case MACRO:
-                case SWITCH:
-                    origin = new int[]{ts.offset(), ts.offset() + token.length()};
-                    originOffset = origin[0];
-                    forward = true;
-                    break;
-
-//                case END_ASSIGN:
-//                case END_LOCAL:
-//                case END_GLOBAL:
-                case END_ATTEMPT:
-                case END_COMPRESS:
-                case END_ESCAPE:
-                case END_NOESCAPE:
-                case END_FOREACH:
-                case END_FUNCTION:
-                case END_IF:
-                case END_LIST:
-                case END_MACRO:
-                case END_SWITCH:
-                    origin = new int[]{ts.offset(), ts.offset() + token.text().toString().trim().length()};
-                    originOffset = origin[0];
-                    forward = false;
-                    break;
-
-                default:
-                    origin = null;
+            if (indexOf(startTags, tokenId) >= 0 || tokenId == ELSE || tokenId == ELSE_IF) {
+                origin = new int[]{ts.offset(), ts.offset() + token.length()};
+                originOffset = origin[0];
+                forward = true;
+            } else if (indexOf(endTags, tokenId) >= 0) {
+                origin = new int[]{ts.offset(), ts.offset() + token.text().toString().trim().length()};
+                originOffset = origin[0];
+                forward = false;
+            } else {
+                origin = null;
             }
         } else {
             origin = null;
         }
 
-        
         //System.out.printf("origin: %s\n", Arrays.toString(origin));
-            
-        
         return origin;
 
     }
@@ -138,8 +124,6 @@ public class FTLBracesMatcher implements BracesMatcher, BracesMatcherFactory {
             ts.move(originOffset);
 
             final boolean hasNext;
-//            boolean sawEquals = false; // flag for non-block assign
-//            boolean sawDirEnd = false; // flag for non-block assign
             if (forward) {
                 hasNext = ts.moveNext();
             } else {
@@ -151,92 +135,42 @@ public class FTLBracesMatcher implements BracesMatcher, BracesMatcherFactory {
                 theLoop:
                 while ((level >= 0) && (forward ? ts.moveNext() : ts.movePrevious()) && !MatcherContext.isTaskCanceled()) {
                     final Token<? extends TokenId> token = ts.offsetToken();
+                    int tokenId = token.id().ordinal();
 
-                    switch (token.id().ordinal()) {
-                        case ELSE_IF:
-                        case ELSE:
+                    if (indexOf(startTags, tokenId) >= 0) {
+                        if (!forward) {
                             if (level == 0) {
                                 matches.add(ts.offset());
                                 matches.add(ts.offset() + token.length());
                             }
-                            break;
 
-                        //case ASSIGN:
-//                        case GLOBALASSIGN:
-//                        case LOCALASSIGN:
-                        case ATTEMPT:
-                        case COMPRESS:
-                        case ESCAPE:
-                        case NOESCAPE:
-                        case FOREACH:
-                        case FUNCTION:
-                        case IF:
-                        case LIST:
-                        case MACRO:
-                        case SWITCH:
-                            if (!forward) {
-                                if (level == 0) {
-                                    matches.add(ts.offset());
-                                    matches.add(ts.offset() + token.length());
-                                }
-
-                                level--;
-                            } else {
-                                level++;
+                            level--;
+                        } else {
+                            level++;
+                        }
+                    } else if (indexOf(endTags, tokenId) >= 0) {
+                        if (forward) {
+                            if (level == 0) {
+                                matches.add(ts.offset());
+                                matches.add(ts.offset() + token.length());
                             }
 
-                            break;
-
-
-//                        case EQUALS:
-//                            if (!backward && !sawDirEnd) {
-//                                sawEquals = true;
-//                            }
-//                            break;
-//                        case DIRECTIVE_END:
-//                        case EMPTY_DIRECTIVE_END:
-//                            sawDirEnd = true;
-//                            if (!backward && level == 0 && sawEquals) {
-//                                matches.add(ts.offset());
-//                                matches.add(ts.offset() + token.length());
-//                                break theLoop;
-//                            }
-//                            break;
-//                        case END_ASSIGN:
-//                        case END_GLOBAL:
-//                        case END_LOCAL:
-                        case END_ATTEMPT:
-                        case END_COMPRESS:
-                        case END_ESCAPE:
-                        case END_NOESCAPE:
-                        case END_FOREACH:
-                        case END_FUNCTION:
-                        case END_IF:
-                        case END_LIST:
-                        case END_MACRO:
-                        case END_SWITCH:
-                            if (forward) {
-                                if (level == 0) {
-                                    matches.add(ts.offset());
-                                    matches.add(ts.offset() + token.length());
-                                }
-
-                                level--;
-                            } else {
-                                level++;
-                            }
-
-                            break;
-
-                        default:
+                            level--;
+                        } else {
+                            level++;
+                        }
+                    } else if (tokenId == ELSE || tokenId == ELSE_IF) {
+                        if (level == 0) {
+                            matches.add(ts.offset());
+                            matches.add(ts.offset() + token.length());
+                        }
                     }
+
                 }
             }
         }
 
-        //System.out.printf("matches %s\n", Arrays.deepToString(matches.toArray()));
-        
-
+        System.out.printf("matches %s\n", Arrays.deepToString(matches.toArray()));
         int[] m = null;
         if (matches.size() > 0) {
             m = new int[matches.size()];

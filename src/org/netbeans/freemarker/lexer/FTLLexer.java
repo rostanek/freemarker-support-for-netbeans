@@ -80,10 +80,7 @@ class FTLLexer implements Lexer<FTLTokenId> {
         }
         int length = token.image.length();
         //debug("length " + length + " readLength " + info.input().readLength());
-        
-        if (token.kind == FMParserConstants.TRIVIAL_FTL_HEADER) {
-            //length++; // for \n eaten by eatNewline
-        }
+
         return info.tokenFactory().createToken(tokenId, length);
     }
 

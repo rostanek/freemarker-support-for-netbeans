@@ -29,10 +29,10 @@ public class FMParserWSTokenManager implements FMParserConstants
     private int parenthesisNesting;
     private int bracketNesting;
     private boolean inFTLHeader;
-    boolean strictEscapeSyntax,
+    boolean strictEscapeSyntax = true,
             onlyTextOutput,
             squBracTagSyntax,
-            autodetectTagSyntax,
+            autodetectTagSyntax = true,
             directiveSyntaxEstablished,
             inInvocation;
     int incompatibleImprovements;

@@ -139,6 +139,8 @@ public class FTLCompletionItem implements CompletionItem {
             docs.put("case", "switch");
             docs.put("default", "switch");
             docs.put("break", "switch");
+            docs.put("lt", "t");
+            docs.put("rt", "t");
             try {
                 String page = item.text;
                 if (docs.containsKey(page)) {

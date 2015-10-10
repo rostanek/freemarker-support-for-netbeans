@@ -48,16 +48,22 @@ class FTLLexer implements Lexer<FTLTokenId> {
             token = fmParserTokenManager.getNextToken();
 
         } catch (TokenMgrError err) {
-            debug(err.getMessage());
-            org.netbeans.api.lexer.Token<FTLTokenId> result;
-            if (err.getMessage().startsWith("You can't use")) {
-                result = info.tokenFactory().createToken(FTLLanguageHierarchy.getToken(FMParserConstants.STATIC_TEXT_NON_WS), 2);
-                debug("fictional 2 char token to recover");
-            } else {
-                result = info.tokenFactory().createToken(FTLLanguageHierarchy.getToken(FMParserConstants.STATIC_TEXT_NON_WS), 1);
-                debug("fictional 1 char token to recover");
+            String msg = err.getMessage();
+            debug(msg);
+            int len = 1;
+            if (msg.startsWith("You can't use")) {
+                len = 2;
+            } else if (msg.startsWith("Unknown directive")) {
+                String dn = msg.substring(20, msg.indexOf("."));
+                debug(dn);
+                len = dn.length() + 2;
+            } else if (msg.contains("is an existing directive")) {
+                String dn = msg.substring(0, msg.indexOf("is an"));
+                debug(dn);
+                len = dn.length();
             }
-            return result;
+            debug("fictional STATIC_TEXT_NON_WS token with length = " + len + " to recover");
+            return info.tokenFactory().createToken(FTLLanguageHierarchy.getToken(FMParserConstants.STATIC_TEXT_NON_WS), len);
         }
         FTLTokenId tokenId = FTLLanguageHierarchy.getToken(token.kind);
         //debug(token.beginLine + ":" + token.beginColumn + " " + token.endLine + ":" + token.endColumn);

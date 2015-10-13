@@ -37,18 +37,43 @@ import java.util.*;
  */
 public class FMParser {
 
-    // Necessary for adding macros and setting location info.
+    private static final int ITERATOR_BLOCK_KIND_LIST = 0; 
+    private static final int ITERATOR_BLOCK_KIND_FOREACH = 1; 
+    private static final int ITERATOR_BLOCK_KIND_ITEMS = 2; 
+    private static final int ITERATOR_BLOCK_KIND_USER_DIRECTIVE = 3; 
+
+    private static class ParserIteratorBlockContext {
+        private String loopVarName;
+        private int kind;
+    }
+
+    /** Necessary for adding macros and setting location info. */
     private Template template;
 
-    // variables that keep track of whether we are in a loop or a switch.
-    private int loopNesting, switchNesting;
-    private boolean inMacro, inFunction, stripWhitespace, stripText;
+    private boolean stripWhitespace, stripText;
+
+    /** Keeps track of #list and #foreach nesting. */
+    private List/*<ParserIteratorBlockContext>*/ iteratorBlockContexts;
+    
+    /**
+     * Keeps track of the nesting depth of directives that support #break.
+     */
+    private int breakableDirectiveNesting;
+    
+    /**
+     * Keeps track of the flags of the innermost parent #list or #foreach directive.
+     */
+    private int parentListAndForeachFlags;
+    
+    private boolean inMacro, inFunction;
     private LinkedList escapes = new LinkedList();
     private int mixedContentNesting; // for stripText
     private int incompatibleImprovements;
 
     /**
      * Create an FM expression parser using a string.
+     *
+     * @Deprecated This is an internal API of FreeMarker; can be removed any time.
      */
     static public FMParser createExpressionParser(String s) {
         SimpleCharStream scs = new SimpleCharStream(new StringReader(s), 1, 1, s.length());
@@ -68,6 +93,8 @@ public class FMParser {
      *            The character stream to use as input
      * @param strictEscapeSyntax
      *            Whether FreeMarker directives must start with a #
+     *
+     * @Deprecated This is an internal API of FreeMarker; will be removed in 2.4.
      */
     public FMParser(Template template, Reader reader, boolean strictEscapeSyntax, boolean stripWhitespace) {
         this(reader);
@@ -77,14 +104,30 @@ public class FMParser {
         this.stripWhitespace = stripWhitespace;
     }
 
+    /**
+     * @Deprecated This is an internal API of FreeMarker; will be changed in 2.4.
+     */
     public FMParser(Template template, Reader reader, boolean strictEscapeSyntax, boolean stripWhitespace, int tagSyntax) {
         this(template, reader, strictEscapeSyntax, stripWhitespace, tagSyntax,
                 Configuration.PARSED_DEFAULT_INCOMPATIBLE_ENHANCEMENTS);
     }
 
+    /**
+     * @Deprecated This is an internal API of FreeMarker; will be changed in 2.4.
+     */
     public FMParser(Template template, Reader reader, boolean strictEscapeSyntax, boolean stripWhitespace,
             int tagSyntax, int incompatibleImprovements) {
+        this(template, reader, strictEscapeSyntax, stripWhitespace,
+                tagSyntax, Configuration.AUTO_DETECT_NAMING_CONVENTION, incompatibleImprovements);
+    }
+
+    /**
+     * @Deprecated This is an internal API of FreeMarker; will be changed in 2.4.
+     */
+    public FMParser(Template template, Reader reader, boolean strictEscapeSyntax, boolean stripWhitespace,
+            int tagSyntax, int namingConvention, int incompatibleImprovements) {
         this(template, reader, strictEscapeSyntax, stripWhitespace);
+        
         switch (tagSyntax) {
         case Configuration.AUTO_DETECT_TAG_SYNTAX:
             token_source.autodetectTagSyntax = true;
@@ -98,10 +141,25 @@ public class FMParser {
         default:
             throw new IllegalArgumentException("Illegal argument for tagSyntax");
         }
+        
+        switch (namingConvention) {
+        case Configuration.AUTO_DETECT_NAMING_CONVENTION:
+        case Configuration.CAMEL_CASE_NAMING_CONVENTION:
+        case Configuration.LEGACY_NAMING_CONVENTION:
+            token_source.initialNamingConvention = namingConvention;
+            token_source.namingConvention = namingConvention;
+            break;
+        default:
+            throw new IllegalArgumentException("Illegal argument for namingConvention");
+        }
+        
         token_source.incompatibleImprovements = incompatibleImprovements;
         this.incompatibleImprovements = incompatibleImprovements;
     }
 
+    /**
+     * @Deprecated This is an internal API of FreeMarker; will be changed in 2.4.
+     */
     public FMParser(String template) {
         this(null, new StringReader(template), true, true);
     }
@@ -119,11 +177,19 @@ public class FMParser {
     /**
      * Don't use it, unless you are developing FreeMarker itself.
      */
-    public int _getLastTagSyntax()
-    {
+    public int _getLastTagSyntax() {
         return token_source.squBracTagSyntax
                 ? Configuration.SQUARE_BRACKET_TAG_SYNTAX
                 : Configuration.ANGLE_BRACKET_TAG_SYNTAX;
+    }
+    
+    /**
+     * Don't use it, unless you are developing FreeMarker itself.
+     * The naming convention used by this template; if it couldn't be detected so far, it will be the most probable one.
+     * This could be used for formatting error messages, but not for anything serious.
+     */
+    public int _getLastNamingConvention() {
+        return token_source.namingConvention;
     }
 
     /**
@@ -247,6 +313,52 @@ public class FMParser {
         }
         throw new ParseException("Expecting boolean (true/false) parameter", exp);
     }
+    
+    private ParserIteratorBlockContext pushIteratorBlockContext() {
+        if (iteratorBlockContexts == null) {
+            iteratorBlockContexts = new ArrayList(4);
+        }
+        ParserIteratorBlockContext newCtx = new ParserIteratorBlockContext();
+        iteratorBlockContexts.add(newCtx);
+        return newCtx;
+    }
+    
+    private void popIteratorBlockContext() {
+        iteratorBlockContexts.remove(iteratorBlockContexts.size() - 1);
+    }
+    
+    private ParserIteratorBlockContext peekIteratorBlockContext() {
+        int size = iteratorBlockContexts != null ? iteratorBlockContexts.size() : 0;
+        return size != 0 ? (ParserIteratorBlockContext) iteratorBlockContexts.get(size - 1) : null; 
+    }
+    
+    private void checkLoopVariableBuiltInLHO(String loopVarName, Expression lhoExp, Token biName)
+            throws ParseException {
+        int size = iteratorBlockContexts != null ? iteratorBlockContexts.size() : 0;
+        for (int i = size - 1; i >= 0; i--) {
+            ParserIteratorBlockContext ctx = (ParserIteratorBlockContext) iteratorBlockContexts.get(i);
+            if (loopVarName.equals(ctx.loopVarName)) {
+                if (ctx.kind == ITERATOR_BLOCK_KIND_USER_DIRECTIVE) {
+			        throw new ParseException(
+			                "The left hand operand of ?" + biName.image
+			                + " can't be the loop variable of an user defined directive: "
+			                +  loopVarName,
+			                lhoExp);
+                }
+                return;  // success
+            }
+        }
+        throw new ParseException(
+                "The left hand operand of ?" + biName.image + " must be a loop variable, "
+                + "but there's no loop variable in scope with this name: " + loopVarName,
+                lhoExp);
+    }
+    
+	private String forEachDirectiveSymbol() {    
+	    // [2.4] Use camel case as the default
+	    return token_source.namingConvention == Configuration.CAMEL_CASE_NAMING_CONVENTION ? "#forEach" : "#foreach";
+	}
+    
 }
 
 PARSER_END(FMParser)
@@ -312,6 +424,9 @@ TOKEN_MGR_DECLS:
             autodetectTagSyntax,
             directiveSyntaxEstablished,
             inInvocation;
+    int initialNamingConvention;
+    int namingConvention;
+    Token namingConventionEstabilisher;
     int incompatibleImprovements;
 
     void setParser(FMParser parser) {
@@ -326,12 +441,24 @@ TOKEN_MGR_DECLS:
     // FreeMarker directives must start with <#. It also handles
     // tag syntax detection. If you update this logic, take a look
     // at the UNKNOWN_DIRECTIVE token too.
-    private void strictSyntaxCheck(Token tok, int newLexState) {
+    private void strictSyntaxCheck(Token tok, int tokenNamingConvention, int newLexState) {
         if (onlyTextOutput) {
             tok.kind = STATIC_TEXT_NON_WS;
             return;
         }
-        char firstChar = tok.image.charAt(0);
+
+        final String image = tok.image;
+        
+        // Non-strict syntax (deprecated) only supports legacy naming convention.
+        // We didn't push this on the tokenizer because it made it slow, so we filter here.
+        if (!strictEscapeSyntax
+                && (tokenNamingConvention == Configuration.CAMEL_CASE_NAMING_CONVENTION)
+                && !isStrictTag(image)) {
+            tok.kind = STATIC_TEXT_NON_WS;
+            return;
+        }
+        
+        char firstChar = image.charAt(0);
         if (autodetectTagSyntax && !directiveSyntaxEstablished) {
             squBracTagSyntax = (firstChar == '[');
         }
@@ -339,18 +466,108 @@ TOKEN_MGR_DECLS:
             tok.kind = STATIC_TEXT_NON_WS;
             return;
         }
+        
         if (!strictEscapeSyntax) {
+            // Legacy feature (or bug?): Tag syntax never gets estabilished in non-strict mode.
+            // We do establilish the naming convention though.
+            checkNamingConvention(tok, tokenNamingConvention);
             SwitchTo(newLexState);
             return;
         }
-        if (!squBracTagSyntax) {
-            if (!tok.image.startsWith("<#") && !tok.image.startsWith("</#")) {
-                tok.kind = STATIC_TEXT_NON_WS;
-                return;
-            }
+        
+        // For square bracket tags there's no non-strict token, so we are sure that it's an FTL tag.
+        // But if it's an angle bracket tag, we have to check if it's just static text or and FTL tag, because the
+        // tokenizer will emit the same kind of token for both.
+        if (!squBracTagSyntax && !isStrictTag(image)) {
+            tok.kind = STATIC_TEXT_NON_WS;
+            return;
         }
+        
+        // We only get here if this is a strict FTL tag.
         directiveSyntaxEstablished = true;
+        
+        checkNamingConvention(tok, tokenNamingConvention);
+        
         SwitchTo(newLexState);
+    }
+
+    void checkNamingConvention(Token tok) {
+        checkNamingConvention(tok, _CoreStringUtils.getIdentifierNamingConvention(tok.image)); 
+    }
+    
+    void checkNamingConvention(Token tok, int tokenNamingConvention) {
+        if (tokenNamingConvention != Configuration.AUTO_DETECT_NAMING_CONVENTION) {
+	        if (namingConvention == Configuration.AUTO_DETECT_NAMING_CONVENTION) {
+	            namingConvention = tokenNamingConvention;
+	            namingConventionEstabilisher = tok;
+	        } else if (namingConvention != tokenNamingConvention) {
+                throw newNameConventionMismatchException(tok);
+	        }
+        }
+    }
+    
+    private TokenMgrError newNameConventionMismatchException(Token tok) {
+        return new TokenMgrError(
+                "Naming convention mismatch. "
+                + "Identifiers that are part of the template language (not the user specified ones) "
+                + (initialNamingConvention == Configuration.AUTO_DETECT_NAMING_CONVENTION
+                    ? "must consistently use the same naming convention within the same template. This template uses "
+                    : "must use the configured naming convention, which is the ")
+                + (namingConvention == Configuration.CAMEL_CASE_NAMING_CONVENTION
+                            ? "camel case naming convention (like: exampleName) "
+                            : (namingConvention == Configuration.LEGACY_NAMING_CONVENTION
+                                    ? "legacy naming convention (directive (tag) names are like examplename, " 
+                                      + "everything else is like example_name) "
+                                    : "??? (internal error)"
+                                    ))
+                + (namingConventionEstabilisher != null
+                        ? "estabilished by auto-detection at "
+                            + MessageUtil.formatPosition(
+                                    namingConventionEstabilisher.beginLine, namingConventionEstabilisher.beginColumn)
+                            + " by token " + StringUtil.jQuote(namingConventionEstabilisher.image.trim())
+                        : "")
+                + ", but the problematic token, " + StringUtil.jQuote(tok.image.trim())
+                + ", uses a different convention.",
+                TokenMgrError.LEXICAL_ERROR,
+                tok.beginLine, tok.beginColumn, tok.endLine, tok.endColumn);
+    }
+
+    /**
+     * Used for tags whose name isn't affected by naming convention.
+     */
+    private void strictSyntaxCheck(Token tok, int newLexState) {
+        strictSyntaxCheck(tok, Configuration.AUTO_DETECT_NAMING_CONVENTION, newLexState);
+    }
+    
+    private boolean isStrictTag(String image) {
+        return image.length() > 2 && (image.charAt(1) == '#' || image.charAt(2) == '#');
+    }
+    
+    /**
+     * Detects the naming convention used, both in start- and end-tag tokens.
+     *
+     * @param charIdxInName
+     *         The index of the deciding character relatively to the first letter of the name.
+     */
+    private static int getTagNamingConvention(Token tok, int charIdxInName) {
+        return _CoreStringUtils.isUpperUSASCII(getTagNameCharAt(tok, charIdxInName))
+                ? Configuration.CAMEL_CASE_NAMING_CONVENTION : Configuration.LEGACY_NAMING_CONVENTION;
+    }
+
+    static char getTagNameCharAt(Token tok, int charIdxInName) {
+        final String image = tok.image;
+        
+        // Skip tag delimiter:
+        int idx = 0;
+        for (;;) {
+            final char c = image.charAt(idx);
+            if (c != '<' && c != '[' && c != '/' && c != '#') {
+                break;
+            }
+            idx++;
+        }
+
+        return image.charAt(idx + charIdxInName);
     }
 
     private void unifiedCall(Token tok) {
@@ -448,7 +665,7 @@ TOKEN_MGR_DECLS:
 
 TOKEN:
 {
-    <#BLANK : [" ", "\t", "\n", "\r"]>
+    <#BLANK : " " | "\t" | "\n" | "\r">
     |
     <#START_TAG : "<" | "<#" | "[#">
     |
@@ -467,11 +684,19 @@ TOKEN:
     |
     <IF : <START_TAG> "if" <BLANK>> { strictSyntaxCheck(matchedToken, FM_EXPRESSION); }
     |
-    <ELSE_IF : <START_TAG> "elseif" <BLANK>> { strictSyntaxCheck(matchedToken, FM_EXPRESSION); }
+    <ELSE_IF : <START_TAG> "else" ("i" | "I") "f" <BLANK>> {
+        strictSyntaxCheck(matchedToken, getTagNamingConvention(matchedToken, 4), FM_EXPRESSION);
+    }
     |
     <LIST : <START_TAG> "list" <BLANK>> { strictSyntaxCheck(matchedToken, FM_EXPRESSION); }
     |
-    <FOREACH : <START_TAG> "foreach" <BLANK>> { strictSyntaxCheck(matchedToken, FM_EXPRESSION); }
+    <ITEMS : <START_TAG> "items" (<BLANK>)+ <AS> <BLANK>> { strictSyntaxCheck(matchedToken, FM_EXPRESSION); }
+    |
+    <SEP : <START_TAG> "sep" <CLOSE_TAG1>>
+    |
+    <FOREACH : <START_TAG> "for" ("e" | "E") "ach" <BLANK>> {
+        strictSyntaxCheck(matchedToken, getTagNamingConvention(matchedToken, 3), FM_EXPRESSION);
+    }
     |
     <SWITCH : <START_TAG> "switch" <BLANK>> { strictSyntaxCheck(matchedToken, FM_EXPRESSION); }
     |
@@ -505,21 +730,33 @@ TOKEN:
     |
     <COMPRESS : <START_TAG> "compress" <CLOSE_TAG1>> { strictSyntaxCheck(matchedToken, DEFAULT); }
     |
-    <COMMENT : <START_TAG> "comment" <CLOSE_TAG1>> { strictSyntaxCheck(matchedToken, NO_PARSE); noparseTag = "comment"; }
+    <COMMENT : <START_TAG> "comment" <CLOSE_TAG1>> {
+        strictSyntaxCheck(matchedToken, NO_PARSE); noparseTag = "comment";
+    }
     |
     <TERSE_COMMENT : ("<" | "[") "#--" > { noparseTag = "-->"; strictSyntaxCheck(matchedToken, NO_PARSE); }
     |
-    <NOPARSE : <START_TAG> "noparse" <CLOSE_TAG1>> { strictSyntaxCheck(matchedToken, NO_PARSE); noparseTag = "noparse"; }
+    <NOPARSE: <START_TAG> "no" ("p" | "P") "arse" <CLOSE_TAG1>> {
+        int tagNamingConvention = getTagNamingConvention(matchedToken, 2);
+        strictSyntaxCheck(matchedToken, tagNamingConvention, NO_PARSE);
+        noparseTag = tagNamingConvention == Configuration.CAMEL_CASE_NAMING_CONVENTION ? "noParse" : "noparse";
+    }
     |
     <END_IF : <END_TAG> "if" <CLOSE_TAG1>> { strictSyntaxCheck(matchedToken, DEFAULT); }
     |
     <END_LIST : <END_TAG> "list" <CLOSE_TAG1>> { strictSyntaxCheck(matchedToken, DEFAULT); }
     |
+    <END_ITEMS : <END_TAG> "items" <CLOSE_TAG1>> { strictSyntaxCheck(matchedToken, DEFAULT); }
+    |
+    <END_SEP : <END_TAG> "sep" <CLOSE_TAG1>> { strictSyntaxCheck(matchedToken, DEFAULT); }
+    |
     <END_RECOVER : <END_TAG> "recover" <CLOSE_TAG1>> { strictSyntaxCheck(matchedToken, DEFAULT); }
     |
     <END_ATTEMPT : <END_TAG> "attempt" <CLOSE_TAG1>> { strictSyntaxCheck(matchedToken, DEFAULT); }
     |
-    <END_FOREACH : <END_TAG> "foreach" <CLOSE_TAG1>> { strictSyntaxCheck(matchedToken, DEFAULT); }
+    <END_FOREACH : <END_TAG> "for" ("e" | "E") "ach" <CLOSE_TAG1>> {
+        strictSyntaxCheck(matchedToken, getTagNamingConvention(matchedToken, 3), DEFAULT);
+    }
     |
     <END_LOCAL : <END_TAG> "local" <CLOSE_TAG1>> { strictSyntaxCheck(matchedToken, DEFAULT); }
     |
@@ -571,9 +808,13 @@ TOKEN:
     |
     <END_ESCAPE : <END_TAG> "escape" <CLOSE_TAG1>> { strictSyntaxCheck(matchedToken, DEFAULT); }
     |
-    <NOESCAPE : <START_TAG> "noescape" <CLOSE_TAG1>> { strictSyntaxCheck(matchedToken, DEFAULT); }
+    <NOESCAPE : <START_TAG> "no" ("e" | "E") "scape" <CLOSE_TAG1>> {
+        strictSyntaxCheck(matchedToken, getTagNamingConvention(matchedToken, 2), DEFAULT);
+    }
     |
-    <END_NOESCAPE : <END_TAG> "noescape" <CLOSE_TAG1>> { strictSyntaxCheck(matchedToken, DEFAULT); }
+    <END_NOESCAPE : <END_TAG> "no" ("e" | "E") "scape" <CLOSE_TAG1>> {
+        strictSyntaxCheck(matchedToken, getTagNamingConvention(matchedToken, 2), DEFAULT);
+    }
     |
     <UNIFIED_CALL : "<@" | "[@" > { unifiedCall(matchedToken); }
     |
@@ -586,7 +827,7 @@ TOKEN:
     /*
      * ATTENTION: Update _CoreAPI.BUILT_IN_DIRECTIVE_NAMES if you add new directives!
      */
-    <UNKNOWN_DIRECTIVE : ("[#" | "[/#" | "<#" | "</#") (["a"-"z","A"-"Z", "_"])+>
+    <UNKNOWN_DIRECTIVE : ("[#" | "[/#" | "<#" | "</#") (["a"-"z", "A"-"Z", "_"])+>
     {
         if (!directiveSyntaxEstablished && incompatibleImprovements < _TemplateAPI.VERSION_INT_2_3_19) {
             matchedToken.kind = STATIC_TEXT_NON_WS;
@@ -613,22 +854,18 @@ TOKEN:
                 // unknown directive:
                 if (_CoreAPI.BUILT_IN_DIRECTIVE_NAMES.contains(dn)) {
                     throw new TokenMgrError(
-                            "#" + dn + " is an existing directive, but the tag is malformed.",
+                            "#" + dn + " is an existing directive, but the tag is malformed. " 
+                            + " (See FreeMarker Manual / Directive Reference.)",
                             TokenMgrError.LEXICAL_ERROR,
                             matchedToken.beginLine, matchedToken.beginColumn + 1,
                             matchedToken.endLine, matchedToken.endColumn);
                 }
 
                 String tip = null;
-                if (dn.equals("elseIf") || dn.equals("forEach") || dn.equals("noParse") || dn.equals("noEscape")) {
-                    tip = "Supporting camelCase directive names is planned for FreeMarker 2.4.0; check if an update is "
-                            + "available, and if it indeed supports camel case. Until that, use all-lowercase.";
-                } else if (!dn.toLowerCase().equals(dn)) {
-                    tip = "In FreeMarker 2.3.x, directive names are all-lower-case.";
-                } else if (dn.equals("set") || dn.equals("var")) {
+                if (dn.equals("set") || dn.equals("var")) {
                     tip = "Use #assign or #local or #global, depending on the intented scope "
                           + "(#assign is template-scope). " + PLANNED_DIRECTIVE_HINT;
-                } else if (dn.equals("else_if")) {
+                } else if (dn.equals("else_if") || dn.equals("elif")) {
                 	tip = "Use #elseif.";
                 } else if (dn.equals("no_escape")) {
                 	tip = "Use #noescape instead.";
@@ -640,10 +877,12 @@ TOKEN:
                 	tip = "You may meant #attempt.";
                 } else if (dn.equals("for") || dn.equals("each") || dn.equals("iterate") || dn.equals("iterator")) {
                     tip = "You may meant #list (http://freemarker.org/docs/ref_directive_list.html).";
-                } else if (dn.equals("item") || dn.equals("sep")) {
-                    tip = PLANNED_DIRECTIVE_HINT;
                 } else if (dn.equals("prefix")) {
                     tip = "You may meant #import. " + PLANNED_DIRECTIVE_HINT;
+                } else if (dn.equals("item") | dn.equals("row") | dn.equals("rows")) {
+                    tip = "You may meant #items.";
+                } else if (dn.equals("separator") | dn.equals("separate") | dn.equals("separ")) {
+                    tip = "You may meant #sep.";
                 } else {
                     tip = "Help (latest version): http://freemarker.org/docs/ref_directive_alphaidx.html; "
                             + "you're using FreeMarker " + Configuration.getVersion() + ".";
@@ -660,7 +899,7 @@ TOKEN:
 
 <DEFAULT, NODIRECTIVE> TOKEN :
 {
-    <STATIC_TEXT_WS : (["\n", "\r", "\t", " "])+>
+    <STATIC_TEXT_WS : ("\n" | "\r" | "\t" | " ")+>
     |
     <STATIC_TEXT_NON_WS : (~["$", "<", "#", "[", "{", "\n", "\r", "\t", " "])+>
     |
@@ -675,7 +914,7 @@ TOKEN:
 {
     <WHITESPACE : ( " " | "\t" | "\n" | "\r" )+ >
     |
-    < ["<", "["] ["#", "!"] "--"> : EXPRESSION_COMMENT
+    < ("<" | "[") ("#" | "!") "--"> : EXPRESSION_COMMENT
 }
 // CHANGED SKIP TO TOKEN
 <EXPRESSION_COMMENT> TOKEN:
@@ -701,22 +940,22 @@ TOKEN:
     <#ESCAPED_CHAR :
         "\\"
         (
-            ["n","t","r","f","b","g","l","a","\\","'","\"","$","{"]
+            ("n" | "t" | "r" | "f" | "b" | "g" | "l" | "a" | "\\" | "'" | "\"" | "$" | "{")
             |
-            ("x" ["0"-"9","A"-"F","a"-"f"])
+            ("x" ["0"-"9", "A"-"F", "a"-"f"])
         )
     >
     | 
     <STRING_LITERAL :
         (
             "\""
-            ((~["\"","\\"]) | <ESCAPED_CHAR>)*
+            ((~["\"", "\\"]) | <ESCAPED_CHAR>)*
             "\""
         )
         |
         (
             "'"
-            ((~["'","\\"]) | <ESCAPED_CHAR>)*
+            ((~["'", "\\"]) | <ESCAPED_CHAR>)*
             "'"
         )
     >
@@ -761,6 +1000,20 @@ TOKEN:
     <DOUBLE_EQUALS : "==">
     |
     <NOT_EQUALS : "!=">
+    |
+    <PLUS_EQUALS : "+=">
+    |
+    <MINUS_EQUALS : "-=">
+    |
+    <TIMES_EQUALS : "*=">
+    |
+    <DIV_EQUALS : "/=">
+    |
+    <MOD_EQUALS : "%=">
+    |
+    <PLUS_PLUS : "++">
+    |
+    <MINUS_MINUS : "--">
     |
     <LESS_THAN : "lt" | "\\lt" | "<" | "&lt;">
     |
@@ -1006,11 +1259,11 @@ TOKEN:
         ]
     >
     |
-    <#ESCAPED_ID_CHAR: "\\" ["-", ".", ":"] >
+    <#ESCAPED_ID_CHAR: "\\" ("-" | "." | ":")>
     |
     <#ID_START_CHAR: <NON_ESCAPED_ID_START_CHAR>|<ESCAPED_ID_CHAR>>
     |
-    <#ASCII_DIGIT: ["0" - "9"] >
+    <#ASCII_DIGIT: ["0" - "9"]>
 }
 
 <FM_EXPRESSION, NO_SPACE_EXPRESSION, NAMED_PARAMETER_EXPRESSION> TOKEN :
@@ -1278,7 +1531,7 @@ Expression MultiplicativeExpression() :
                 |
                 <DIVIDE> { operation = ArithmeticExpression.TYPE_DIVISION; }
                 |
-                <PERCENT>{operation = ArithmeticExpression.TYPE_MODULO; }
+                <PERCENT> {operation = ArithmeticExpression.TYPE_MODULO; }
             )
         )
         rhs = UnaryExpression()
@@ -1538,15 +1791,8 @@ BuiltinVariable BuiltinVariable() :
     name = <ID>
     {
         BuiltinVariable result = null;
-        try {
-            result = new BuiltinVariable(name.image);
-        } catch (ParseException pe) {
-            pe.lineNumber = dot.beginLine;
-            pe.columnNumber = dot.beginColumn;
-            pe.endLineNumber = name.endLine;
-            pe.endColumnNumber = name.endColumn;
-            throw pe;
-        }
+        token_source.checkNamingConvention(name);
+        result = new BuiltinVariable(name, token_source);
         result.setLocation(template, dot, name);
         return result;
     }
@@ -1621,26 +1867,52 @@ Expression Exists(Expression exp) :
     }
 }
 
-Expression BuiltIn(Expression exp) :
+Expression BuiltIn(Expression lhoExp) :
 {
     Token t = null;
+    BuiltIn result;
+    ArrayList/*<Expression>*/ args = null;
+    Token openParen;
+    Token closeParen;
 }
 {
     <BUILT_IN>
     t = <ID>
     {
-        BuiltIn result = null;
-        try {
-            result = BuiltIn.newBuiltIn(incompatibleImprovements, exp, t.image);
-        } catch (ParseException pe) {
-            pe.lineNumber = t.beginLine;
-            pe.columnNumber = t.beginColumn;
-            pe.endLineNumber = t.endLine;
-            pe.endColumnNumber = t.endColumn;
-            throw pe;
+        token_source.checkNamingConvention(t);
+        result = BuiltIn.newBuiltIn(incompatibleImprovements, lhoExp, t, token_source);
+        result.setLocation(template, lhoExp, t);
+        
+        if (!(result instanceof SpecialBuiltIn)) {
+            return result;
         }
-        result.setLocation(template, exp, t);
-        return result;
+        
+        if (result instanceof BuiltInForLoopVariable) {
+            if (!(lhoExp instanceof Identifier)) {
+                throw new ParseException(
+                        "Expression used as the left hand operand of ?" + t.image
+                        + " must be a simple loop variable name.", lhoExp);
+            }
+            String loopVarName = ((Identifier) lhoExp).getName();
+            checkLoopVariableBuiltInLHO(loopVarName, lhoExp, t);
+            ((BuiltInForLoopVariable) result).bindToLoopVariable(loopVarName);
+            
+            return result;
+        }
+    }
+    [
+        LOOKAHEAD({ result instanceof BuiltInWithParseTimeParameters  })
+        openParen = <OPEN_PAREN>
+        args = PositionalArgs()
+        closeParen = <CLOSE_PAREN> {
+            result.setLocation(template, lhoExp, closeParen);
+            ((BuiltInWithParseTimeParameters) result).bindToParameters(args, openParen, closeParen);
+            return result;
+        }
+    ]
+    {
+        // Should have already return-ed
+        throw new AssertionError("Unhandled " + SpecialBuiltIn.class.getName() + " subclass: " + result.getClass());
     }
 }
 
@@ -1763,7 +2035,8 @@ StringLiteral StringLiteral(boolean interpolate) :
         StringLiteral result = new StringLiteral(s);
         result.setLocation(template, t, t);
         if (interpolate && !raw) {
-            if (t.image.indexOf("${") >= 0 || t.image.indexOf("#{") >= 0) result.checkInterpolation();
+            // TODO: This logic is broken. It can't handle literals that contains both ${...} and $\{...}. 
+            if (t.image.indexOf("${") >= 0 || t.image.indexOf("#{") >= 0) result.parseValue(token_source);
         }
         return result;
     }
@@ -2008,46 +2281,180 @@ RecoveryBlock Recover() :
     }
 }
 
-IteratorBlock List() :
+TemplateElement List() :
 {
     Expression exp;
-    Token index, start, end;
+    Token loopVar = null, start, end;
+    TemplateElement mainBlock;
+    ElseOfList elseOfList = null;
+    ParserIteratorBlockContext iterCtx;
+}
+{
+    start = <LIST>
+    exp = Expression()
+    [
+        <AS>
+        loopVar = <ID>
+    ]
+    <DIRECTIVE_END>
+    {
+        iterCtx = pushIteratorBlockContext();
+        if (loopVar != null) {
+            iterCtx.loopVarName = loopVar.image;
+            breakableDirectiveNesting++;
+        }
+    }
+    
+    mainBlock = OptionalBlock()
+    {
+        if (loopVar != null) {
+            breakableDirectiveNesting--;
+        } else if (iterCtx.kind != ITERATOR_BLOCK_KIND_ITEMS) {
+            throw new ParseException(
+                    "#list must have either \"as loopVar\" parameter or nested #items that belongs to it.",
+                    template, start);
+        }
+        popIteratorBlockContext();
+    }
+    
+    [
+        elseOfList = ElseOfList()
+    ]
+    
+    end = <END_LIST>
+    {
+        IteratorBlock list = new IteratorBlock(exp, loopVar != null ? loopVar.image : null, mainBlock, false);
+        list.setLocation(template, start, end);
+
+        TemplateElement result;
+        if (elseOfList == null) {
+            result = list;
+        } else {
+            result = new ListElseContainer(list, elseOfList);
+            result.setLocation(template, start, end);
+        }
+        return result;
+    }
+}
+
+ElseOfList ElseOfList() :
+{
+    Token start;
     TemplateElement block;
 }
 {
-    start = <LIST> {++loopNesting; }
+        start = <ELSE>
+        block = OptionalBlock()
+        {
+            ElseOfList result = new ElseOfList(block);
+	        result.setLocation(template, start, block);
+	        return result;
+        }
+}
+
+IteratorBlock ForEach() :
+{
+    Expression exp;
+    Token loopVar, start, end;
+    TemplateElement block;
+}
+{
+    start = <FOREACH>
+    loopVar = <ID>
+    <IN>
     exp = Expression()
-    <AS>
-    index = <ID>
     <DIRECTIVE_END>
-    block = OptionalBlock()
-    end = <END_LIST>
     {
-        --loopNesting;
-        IteratorBlock result = new IteratorBlock(exp, index.image, block, false);
+        ParserIteratorBlockContext iterCtx = pushIteratorBlockContext();
+        iterCtx.loopVarName = loopVar.image;
+        iterCtx.kind = ITERATOR_BLOCK_KIND_FOREACH;
+        breakableDirectiveNesting++;
+    }
+    
+    block = OptionalBlock()
+    
+    end = <END_FOREACH>
+    {
+        breakableDirectiveNesting--;
+        popIteratorBlockContext();
+                
+        IteratorBlock result = new IteratorBlock(exp, loopVar.image, block, true);
         result.setLocation(template, start, end);
         return result;
     }
 }
 
-IteratorBlock ForEach() :
+Items Items() :
 {
-        Expression exp;
-        Token index, start, end;
-        TemplateElement block;
+    Token loopVar, start, end;
+    TemplateElement block;
+    ParserIteratorBlockContext iterCtx;
 }
 {
-    start = <FOREACH> {++loopNesting; }
-    index = <ID>
-    <IN>
-    exp = Expression()
+    start = <ITEMS>
+    loopVar = <ID>
     <DIRECTIVE_END>
-    block = OptionalBlock()
-    end = <END_FOREACH>
     {
-        --loopNesting;
-        IteratorBlock result = new IteratorBlock(exp, index.image, block, true);
+        iterCtx = peekIteratorBlockContext();
+        if (iterCtx == null) {
+            throw new ParseException("#items must be inside a #list block.", template, start);
+        }
+        if (iterCtx.loopVarName != null) {
+            String msg;
+	        if (iterCtx.kind == ITERATOR_BLOCK_KIND_FOREACH) {
+	            msg = forEachDirectiveSymbol() + " doesn't support nested #items.";
+	        } else if (iterCtx.kind == ITERATOR_BLOCK_KIND_ITEMS) {
+                msg = "Can't nest #items into each other that belong to the same #list.";
+	        } else {
+	            msg = "The parent #list of the #items must not have \"as loopVar\" parameter.";
+            }
+            throw new ParseException(msg, template, start);
+        }
+        iterCtx.kind = ITERATOR_BLOCK_KIND_ITEMS;
+        iterCtx.loopVarName = loopVar.image;
+    
+        breakableDirectiveNesting++;
+    }
+    
+    block = OptionalBlock()
+    
+    end = <END_ITEMS>
+    {
+        breakableDirectiveNesting--;
+        iterCtx.loopVarName = null;
+        
+        Items result = new Items(loopVar.image, block);
         result.setLocation(template, start, end);
+        return result;
+    }
+}
+
+Sep Sep() :
+{
+    Token loopVar, start, end = null;
+    TemplateElement block;
+}
+{
+    start = <SEP>
+    {
+        if (peekIteratorBlockContext() == null) {
+            throw new ParseException(
+                    "#sep must be inside a #list (or " + forEachDirectiveSymbol() + ") block.",
+                    template, start);
+        }
+    }
+    block = OptionalBlock()
+    [
+        LOOKAHEAD(1)
+        end = <END_SEP>
+    ]
+    {
+        Sep result = new Sep(block);
+        if (end != null) {
+            result.setLocation(template, start, end); // Template, Token, Token
+        } else {
+            result.setLocation(template, start, block); // Template, Token, TemplateObject
+        }
         return result;
     }
 }
@@ -2127,9 +2534,10 @@ BreakInstruction Break() :
 {
     start = <BREAK>
     {
-        if (loopNesting < 1 && switchNesting < 1)
-        {
-            throw new ParseException(start.image + " occurred outside a loop or a switch block.", template, start);
+        if (breakableDirectiveNesting < 1) {
+            throw new ParseException(start.image + " must be nested inside a directive that supports it: " 
+                    + " #list with \"as\", #items, #switch (or the deprecated " + forEachDirectiveSymbol() + ")",
+                    template, start);
         }
         BreakInstruction result = new BreakInstruction();
         result.setLocation(template, start, start);
@@ -2148,7 +2556,7 @@ ReturnInstruction Return() :
 }
 {
     (
-        start = <SIMPLE_RETURN>{end = start; }
+        start = <SIMPLE_RETURN> { end = start; }
         |
         start = <RETURN> exp = Expression() end = LooseDirectiveEnd()
     )
@@ -2265,6 +2673,7 @@ TemplateElement Assign() :
     Token start, end;
     int scope;
     Token id = null;
+    Token equalsOp;
     Expression nameExp, exp, nsExp = null;
     String varName;
     ArrayList assignments = new ArrayList();
@@ -2293,15 +2702,39 @@ TemplateElement Assign() :
     }
     (
     	(
-	        <EQUALS>
-	        exp = Expression()
+            (
+	    	    (
+			        (<EQUALS>|<PLUS_EQUALS>|<MINUS_EQUALS>|<TIMES_EQUALS>|<DIV_EQUALS>|<MOD_EQUALS>)
+			        {
+			           equalsOp = token;
+			        }
+			        exp = Expression()
+		        )
+		        |
+		        (
+	                (<PLUS_PLUS>|<MINUS_MINUS>)
+	                {
+	                   equalsOp = token;
+	                   exp = null;
+	                }
+		        )
+	        )
 	        {
-	            ass = new Assignment(varName, exp, scope);
-	            ass.setLocation(template, nameExp, exp);
+	            ass = new Assignment(varName, equalsOp.kind, exp, scope);
+                if (exp != null) {
+                   ass.setLocation(template, nameExp, exp);
+                } else {
+                   ass.setLocation(template, nameExp, equalsOp);
+                }
 	            assignments.add(ass);
 	        }
 	        (
-	            LOOKAHEAD([<COMMA>](<ID>|<STRING_LITERAL>)<EQUALS>)
+	            LOOKAHEAD(
+	               [<COMMA>]
+	               (<ID>|<STRING_LITERAL>)
+	               (<EQUALS>|<PLUS_EQUALS>|<MINUS_EQUALS>|<TIMES_EQUALS>|<DIV_EQUALS>|<MOD_EQUALS>
+	                       |<PLUS_PLUS>|<MINUS_MINUS>)
+	            )
 	            [<COMMA>]
 	            nameExp = IdentifierOrStringLiteral()
 	            {
@@ -2309,11 +2742,30 @@ TemplateElement Assign() :
 	                		? ((StringLiteral) nameExp).getAsString()
 	                		: ((Identifier) nameExp).getName();
 	            }
-	            <EQUALS>
-	            exp = Expression()
+	            (
+	                (
+	                    (<EQUALS>|<PLUS_EQUALS>|<MINUS_EQUALS>|<TIMES_EQUALS>|<DIV_EQUALS>|<MOD_EQUALS>)
+	                    {
+	                       equalsOp = token;
+	                    }
+	                    exp = Expression()
+	                )
+	                |
+	                (
+	                    (<PLUS_PLUS>|<MINUS_MINUS>)
+	                    {
+	                       equalsOp = token;
+	                       exp = null;
+	                    }
+	                )
+	            )
 	            {
-	                ass = new Assignment(varName, exp, scope);
-	                ass.setLocation(template, nameExp, exp);
+	                ass = new Assignment(varName, equalsOp.kind, exp, scope);
+	                if (exp != null) {
+	                   ass.setLocation(template, nameExp, exp);
+	                } else {
+                       ass.setLocation(template, nameExp, equalsOp);
+	                }
 	                assignments.add(ass);
 	            } 
 	        )*
@@ -2328,13 +2780,20 @@ TemplateElement Assign() :
 	        ]
 	        end = LooseDirectiveEnd()
 	        {
-	            AssignmentInstruction ai = new AssignmentInstruction(scope);
-	            for (int i = 0; i< assignments.size(); i++) {
-	                ai.addAssignment((Assignment) assignments.get(i));
+                if (assignments.size() == 1) {
+                    Assignment a = (Assignment) assignments.get(0);
+                    a.setNamespaceExp(nsExp);
+                    a.setLocation(template, start, end);
+                    return a;
+                } else {
+		            AssignmentInstruction ai = new AssignmentInstruction(scope);
+		            for (int i = 0; i< assignments.size(); i++) {
+		                ai.addAssignment((Assignment) assignments.get(i));
+		            }
+		            ai.setNamespaceExp(nsExp);
+		            ai.setLocation(template, start, end);
+		            return ai;
 	            }
-	            ai.setNamespaceExp(nsExp);
-	            ai.setLocation(template, start, end);
-	            return ai;
 	        }
 	    )
 	    |
@@ -2400,7 +2859,8 @@ Include Include() :
         	    parseExp = exp;
             } else if (attString.equalsIgnoreCase("encoding")) {
             	encodingExp = exp;
-            } else if (attString.equalsIgnoreCase("ignore_missing")) {
+            } else if (attString.equalsIgnoreCase("ignore_missing") || attString.equals("ignoreMissing")) {
+                token_source.checkNamingConvention(att);
             	ignoreMissingExp = exp;
             } else {
                 String correctedName = attString.equals("ignoreMissing") ? "ignore_missing" : null;
@@ -2452,6 +2912,8 @@ Macro Macro() :
     HashMap args = new HashMap();
     ArrayList defNames = new ArrayList();
     Expression defValue = null;
+    List lastIteratorBlockContexts;
+    int lastBreakableDirectiveNesting;
     TemplateElement block;
     boolean isFunction = false, hasDefaults = false;
     boolean isCatchAll = false;
@@ -2517,6 +2979,17 @@ Macro Macro() :
     )*
     [<CLOSE_PAREN>]
     <DIRECTIVE_END>
+    {
+        // To prevent parser check loopholes like <#list ...><#macro ...><#break></#macro></#list>.
+        lastIteratorBlockContexts = iteratorBlockContexts;
+        iteratorBlockContexts = null;
+        if (incompatibleImprovements >= _TemplateAPI.VERSION_INT_2_3_23) {
+	        lastBreakableDirectiveNesting = breakableDirectiveNesting;
+	        breakableDirectiveNesting = 0; 
+        } else {
+            lastBreakableDirectiveNesting = 0; // Just to prevent uninitialized local variable error later
+        }
+    }
     block = OptionalBlock()
     (
         end = <END_MACRO>
@@ -2530,6 +3003,11 @@ Macro Macro() :
     	}
     )
     {
+        iteratorBlockContexts = lastIteratorBlockContexts;
+        if (incompatibleImprovements >= _TemplateAPI.VERSION_INT_2_3_23) {
+            breakableDirectiveNesting = lastBreakableDirectiveNesting;
+        }
+        
         inMacro = inFunction = false;
         Macro result = new Macro(name, argNames, args, catchAll, isFunction, block);
         result.setLocation(template, start, end);
@@ -2559,16 +3037,19 @@ TemplateElement UnifiedMacroTransform() :
     Token start = null, end, t;
     HashMap namedArgs = null;
     ArrayList positionalArgs = null, bodyParameters = null;
-    String directiveName = null;
+    Expression startTagNameExp;
     TemplateElement nestedBlock = null;
     Expression exp;
+    int pushedCtxCount = 0;
 }
 {
     start = <UNIFIED_CALL>
     exp = Expression()
     {
         if (exp instanceof Identifier || (exp instanceof Dot && ((Dot) exp).onlyHasIdentifiers())) {
-            directiveName = exp.getCanonicalForm();
+            startTagNameExp = exp;
+        } else {
+            startTagNameExp = null;
         }
     }
     [<TERMINATING_WHITESPACE>]
@@ -2579,12 +3060,12 @@ TemplateElement UnifiedMacroTransform() :
         positionalArgs = PositionalArgs()
     )
     [
-        <SEMICOLON>{bodyParameters = new ArrayList(); }
+        <SEMICOLON>{bodyParameters = new ArrayList(4); }
         [
-            [<TERMINATING_WHITESPACE>]t = <ID> { bodyParameters.add(t.image); }
+            [<TERMINATING_WHITESPACE>] t = <ID> { bodyParameters.add(t.image); }
             (
-                [<TERMINATING_WHITESPACE>]<COMMA>
-                [<TERMINATING_WHITESPACE>]t = <ID>{bodyParameters.add(t.image); }
+                [<TERMINATING_WHITESPACE>] <COMMA>
+                [<TERMINATING_WHITESPACE>] t = <ID>{bodyParameters.add(t.image); }
             )*
         ]
     ]
@@ -2592,17 +3073,46 @@ TemplateElement UnifiedMacroTransform() :
         end = <EMPTY_DIRECTIVE_END>
         |
         (
-            <DIRECTIVE_END>
+            <DIRECTIVE_END> {
+                if (bodyParameters != null && iteratorBlockContexts != null && !iteratorBlockContexts.isEmpty()) {
+                    // It's possible that we shadow a #list/#items loop variable, in which case that must be noted.
+                    int ctxsLen = iteratorBlockContexts.size();
+                    int bodyParsLen = bodyParameters.size();
+	                for (int bodyParIdx = 0; bodyParIdx < bodyParsLen; bodyParIdx++) {
+                        String bodyParName = (String) bodyParameters.get(bodyParIdx);
+                        walkCtxSack: for (int ctxIdx = ctxsLen - 1; ctxIdx >= 0; ctxIdx--) {
+                            ParserIteratorBlockContext ctx
+                                    = (ParserIteratorBlockContext) iteratorBlockContexts.get(ctxIdx);
+                            if (ctx.loopVarName != null && ctx.loopVarName.equals(bodyParName)) {
+                                // If it wasn't already shadowed, shadow it:
+                                if (ctx.kind != ITERATOR_BLOCK_KIND_USER_DIRECTIVE) {
+                                    ParserIteratorBlockContext shadowingCtx = pushIteratorBlockContext();
+                                    shadowingCtx.loopVarName = bodyParName;
+                                    shadowingCtx.kind = ITERATOR_BLOCK_KIND_USER_DIRECTIVE;
+                                    pushedCtxCount++;
+                                }
+                                break walkCtxSack;
+                            }
+                        }
+                   }
+                }
+            }
             nestedBlock = OptionalBlock()
             end = <UNIFIED_CALL_END>
             {
-                String s = end.image.substring(3);
-                s = s.substring(0, s.length() -1).trim();
-                if (s.length() >0 && !s.equals(directiveName)) {
-                    if (directiveName == null) {
+                for (int i = 0; i < pushedCtxCount; i++) {
+                    popIteratorBlockContext();
+                }
+            
+                String endTagName = end.image.substring(3, end.image.length() - 1).trim();
+                if (endTagName.length() > 0) {
+                    if (startTagNameExp == null) {
                         throw new ParseException("Expecting </@>", template, end);
                     } else {
-                        throw new ParseException("Expecting </@> or </@" + directiveName + ">", template, end);
+                        String startTagName = startTagNameExp.getCanonicalForm();
+                        if (!endTagName.equals(startTagName)) {
+                            throw new ParseException("Expecting </@> or </@" + startTagName + ">", template, end);
+                        }
                     }
                 }
             }
@@ -2781,7 +3291,7 @@ SwitchBlock Switch() :
     switchExp = Expression()
     <DIRECTIVE_END>
     {
-        ++switchNesting;
+        breakableDirectiveNesting++;
         switchBlock = new SwitchBlock(switchExp);
     }
     (
@@ -2801,7 +3311,7 @@ SwitchBlock Switch() :
     [<STATIC_TEXT_WS>]
     end = <END_SWITCH>
     {
-        --switchNesting;
+        breakableDirectiveNesting--;
         switchBlock.setLocation(template, start, end);
         return switchBlock;
     }
@@ -2865,7 +3375,7 @@ NoEscapeBlock NoEscape() :
     start = <NOESCAPE>
     {
         if (escapes.isEmpty()) {
-            throw new ParseException("noescape with no matching escape encountered.", template, start);
+            throw new ParseException("#noescape with no matching #escape encountered.", template, start);
         }
         Object escape = escapes.removeFirst();
     }
@@ -2909,7 +3419,8 @@ PropertySetting Setting() :
     value = Expression()
     end = LooseDirectiveEnd()
     {
-        PropertySetting result = new PropertySetting(key.image, value);
+        token_source.checkNamingConvention(key);
+        PropertySetting result = new PropertySetting(key, token_source, value, template.getConfiguration());
         result.setLocation(template, start, end);
         return result;
     }
@@ -2923,6 +3434,8 @@ TemplateElement FreemarkerDirective() :
     TemplateElement tp;
 }
 {
+    // Note that this doesn't include elements like "else", "recover", etc., because those indicate the end
+    // of the OptionalBlock() of "if", "attempt", etc.
     (
         tp = If()
         |
@@ -2941,6 +3454,10 @@ TemplateElement FreemarkerDirective() :
         tp = Compress()
         |
         tp = UnifiedMacroTransform()
+        |
+        tp = Items()
+        |
+        tp = Sep()
         |
         tp = Call()
         |
@@ -3145,6 +3662,8 @@ void HeaderElement() :
                 <EQUALS>
                 exp = Expression()
                 {
+                    token_source.checkNamingConvention(key);
+                
                     String ks = key.image;
                     TemplateModel value = null;
                     try {
@@ -3170,13 +3689,13 @@ void HeaderElement() :
                             if (encoding != null && !encoding.equalsIgnoreCase(vs)) {
                                 throw new Template.WrongEncodingException(vs, encoding);
                             }
-                        } else if (ks.equalsIgnoreCase("STRIP_WHITESPACE")) {
+                        } else if (ks.equalsIgnoreCase("STRIP_WHITESPACE") || ks.equals("stripWhitespace")) {
                             this.stripWhitespace = getBoolean(exp);
-                        } else if (ks.equalsIgnoreCase("STRIP_TEXT")) {
+                        } else if (ks.equalsIgnoreCase("STRIP_TEXT") || ks.equals("stripText")) {
                             this.stripText = getBoolean(exp);
-                        } else if (ks.equalsIgnoreCase("STRICT_SYNTAX")) {
+                        } else if (ks.equalsIgnoreCase("STRICT_SYNTAX") || ks.equals("strictSyntax")) {
                             this.token_source.strictEscapeSyntax = getBoolean(exp);
-                        } else if (ks.equalsIgnoreCase("ns_prefixes")) {
+                        } else if (ks.equalsIgnoreCase("ns_prefixes") || ks.equals("nsPrefixes")) {
                             if (!(value instanceof TemplateHashModelEx)) {
                                 throw new ParseException("Expecting a hash of prefixes to namespace URI's.", exp);
                             }
@@ -3214,24 +3733,19 @@ void HeaderElement() :
                             }
                         } else {
                             String correctName;
-	                        if (ks.equals("stripWhitespace")) {
-	                            correctName = "strip_whitespace";
-	                        } else if (ks.equals("stripText")) {
-	                            correctName = "strip_text";
-	                        } else if (ks.equals("strictSyntax")) {
-	                            correctName = "strict_syntax"; 
-	                        } else if (ks.equals("nsPrefixes")) {
-	                           correctName = "ns_prefixes";
+	                        if (ks.equals("charset")) {
+	                            correctName = "encoding";
+	                        } else if (ks.equals("xmlns")) {
+	                            // [2.4] If came case will be the default, update this
+                                correctName
+                                        = token_source.namingConvention == Configuration.CAMEL_CASE_NAMING_CONVENTION
+                                                ? "nsPrefixes" : "ns_prefixes";
 	                        } else {
 	                           correctName = null;
 	                        }
                             throw new ParseException(
                                     "Unknown FTL header parameter: " + key.image
-                                    + (correctName == null
-                                            ? ""
-                                            : ". Supporting camelCase parameter names is planned for FreeMarker 2.4.0; "
-                                              + "check if an update is available, and if it indeed supports camel "
-                                              + "case. Until that, use " + correctName + " instead."),
+                                    + (correctName == null ? "" : ". Did you mean " + correctName + "?"),
                                     template, key);
                         }
                     }
@@ -3276,7 +3790,10 @@ TemplateElement Root() :
     doc = OptionalBlock()
     <EOF>
     {
-        doc.setParentRecursively(null);
-        return doc.postParseCleanup(stripWhitespace);
+        doc.setFieldsForRootElement();
+        doc = doc.postParseCleanup(stripWhitespace);
+        // The cleanup result is possibly an element from deeper:
+        doc.setFieldsForRootElement();
+        return doc;
     }
 }

@@ -14,128 +14,139 @@ public interface FMParserConstants {
   int IF = 8;
   int ELSE_IF = 9;
   int LIST = 10;
-  int FOREACH = 11;
-  int SWITCH = 12;
-  int CASE = 13;
-  int ASSIGN = 14;
-  int GLOBALASSIGN = 15;
-  int LOCALASSIGN = 16;
-  int _INCLUDE = 17;
-  int IMPORT = 18;
-  int FUNCTION = 19;
-  int MACRO = 20;
-  int TRANSFORM = 21;
-  int VISIT = 22;
-  int STOP = 23;
-  int RETURN = 24;
-  int CALL = 25;
-  int SETTING = 26;
-  int COMPRESS = 27;
-  int COMMENT = 28;
-  int TERSE_COMMENT = 29;
-  int NOPARSE = 30;
-  int END_IF = 31;
-  int END_LIST = 32;
-  int END_RECOVER = 33;
-  int END_ATTEMPT = 34;
-  int END_FOREACH = 35;
-  int END_LOCAL = 36;
-  int END_GLOBAL = 37;
-  int END_ASSIGN = 38;
-  int END_FUNCTION = 39;
-  int END_MACRO = 40;
-  int END_COMPRESS = 41;
-  int END_TRANSFORM = 42;
-  int END_SWITCH = 43;
-  int ELSE = 44;
-  int BREAK = 45;
-  int SIMPLE_RETURN = 46;
-  int HALT = 47;
-  int FLUSH = 48;
-  int TRIM = 49;
-  int LTRIM = 50;
-  int RTRIM = 51;
-  int NOTRIM = 52;
-  int DEFAUL = 53;
-  int SIMPLE_NESTED = 54;
-  int NESTED = 55;
-  int SIMPLE_RECURSE = 56;
-  int RECURSE = 57;
-  int FALLBACK = 58;
-  int ESCAPE = 59;
-  int END_ESCAPE = 60;
-  int NOESCAPE = 61;
-  int END_NOESCAPE = 62;
-  int UNIFIED_CALL = 63;
-  int UNIFIED_CALL_END = 64;
-  int FTL_HEADER = 65;
-  int TRIVIAL_FTL_HEADER = 66;
-  int UNKNOWN_DIRECTIVE = 67;
-  int STATIC_TEXT_WS = 68;
-  int STATIC_TEXT_NON_WS = 69;
-  int STATIC_TEXT_FALSE_ALARM = 70;
-  int DOLLAR_INTERPOLATION_OPENING = 71;
-  int HASH_INTERPOLATION_OPENING = 72;
-  int WHITESPACE = 73;
-  int ESCAPED_CHAR = 80;
-  int STRING_LITERAL = 81;
-  int UNCLOSED_STRING_LITERAL = 82;
-  int RAW_STRING = 83;
-  int FALSE = 84;
-  int TRUE = 85;
-  int INTEGER = 86;
-  int DECIMAL = 87;
-  int DOT = 88;
-  int DOT_DOT = 89;
-  int DOT_DOT_LESS = 90;
-  int DOT_DOT_ASTERISK = 91;
-  int BUILT_IN = 92;
-  int EXISTS = 93;
-  int EQUALS = 94;
-  int DOUBLE_EQUALS = 95;
-  int NOT_EQUALS = 96;
-  int LESS_THAN = 97;
-  int LESS_THAN_EQUALS = 98;
-  int ESCAPED_GT = 99;
-  int ESCAPED_GTE = 100;
-  int PLUS = 101;
-  int MINUS = 102;
-  int TIMES = 103;
-  int DOUBLE_STAR = 104;
-  int ELLIPSIS = 105;
-  int DIVIDE = 106;
-  int PERCENT = 107;
-  int AND = 108;
-  int OR = 109;
-  int EXCLAM = 110;
-  int COMMA = 111;
-  int SEMICOLON = 112;
-  int COLON = 113;
-  int OPEN_BRACKET = 114;
-  int CLOSE_BRACKET = 115;
-  int OPEN_PAREN = 116;
-  int CLOSE_PAREN = 117;
-  int OPENING_CURLY_BRACKET = 118;
-  int CLOSING_CURLY_BRACKET = 119;
-  int IN = 120;
-  int AS = 121;
-  int USING = 122;
-  int ID = 123;
-  int OPEN_MISPLACED_INTERPOLATION = 124;
-  int NON_ESCAPED_ID_START_CHAR = 125;
-  int ESCAPED_ID_CHAR = 126;
-  int ID_START_CHAR = 127;
-  int ASCII_DIGIT = 128;
-  int DIRECTIVE_END = 129;
-  int EMPTY_DIRECTIVE_END = 130;
-  int NATURAL_GT = 131;
-  int NATURAL_GTE = 132;
-  int TERMINATING_WHITESPACE = 133;
-  int TERMINATING_EXCLAM = 134;
-  int TERSE_COMMENT_END = 135;
-  int MAYBE_END = 136;
-  int KEEP_GOING = 137;
-  int LONE_LESS_THAN_OR_DASH = 138;
+  int ITEMS = 11;
+  int SEP = 12;
+  int FOREACH = 13;
+  int SWITCH = 14;
+  int CASE = 15;
+  int ASSIGN = 16;
+  int GLOBALASSIGN = 17;
+  int LOCALASSIGN = 18;
+  int _INCLUDE = 19;
+  int IMPORT = 20;
+  int FUNCTION = 21;
+  int MACRO = 22;
+  int TRANSFORM = 23;
+  int VISIT = 24;
+  int STOP = 25;
+  int RETURN = 26;
+  int CALL = 27;
+  int SETTING = 28;
+  int COMPRESS = 29;
+  int COMMENT = 30;
+  int TERSE_COMMENT = 31;
+  int NOPARSE = 32;
+  int END_IF = 33;
+  int END_LIST = 34;
+  int END_ITEMS = 35;
+  int END_SEP = 36;
+  int END_RECOVER = 37;
+  int END_ATTEMPT = 38;
+  int END_FOREACH = 39;
+  int END_LOCAL = 40;
+  int END_GLOBAL = 41;
+  int END_ASSIGN = 42;
+  int END_FUNCTION = 43;
+  int END_MACRO = 44;
+  int END_COMPRESS = 45;
+  int END_TRANSFORM = 46;
+  int END_SWITCH = 47;
+  int ELSE = 48;
+  int BREAK = 49;
+  int SIMPLE_RETURN = 50;
+  int HALT = 51;
+  int FLUSH = 52;
+  int TRIM = 53;
+  int LTRIM = 54;
+  int RTRIM = 55;
+  int NOTRIM = 56;
+  int DEFAUL = 57;
+  int SIMPLE_NESTED = 58;
+  int NESTED = 59;
+  int SIMPLE_RECURSE = 60;
+  int RECURSE = 61;
+  int FALLBACK = 62;
+  int ESCAPE = 63;
+  int END_ESCAPE = 64;
+  int NOESCAPE = 65;
+  int END_NOESCAPE = 66;
+  int UNIFIED_CALL = 67;
+  int UNIFIED_CALL_END = 68;
+  int FTL_HEADER = 69;
+  int TRIVIAL_FTL_HEADER = 70;
+  int UNKNOWN_DIRECTIVE = 71;
+  int STATIC_TEXT_WS = 72;
+  int STATIC_TEXT_NON_WS = 73;
+  int STATIC_TEXT_FALSE_ALARM = 74;
+  int DOLLAR_INTERPOLATION_OPENING = 75;
+  int HASH_INTERPOLATION_OPENING = 76;
+  int WHITESPACE = 77;
+  int ESCAPED_CHAR = 84;
+  int STRING_LITERAL = 85;
+  int UNCLOSED_STRING_LITERAL = 86;
+  int RAW_STRING = 87;
+  int FALSE = 88;
+  int TRUE = 89;
+  int INTEGER = 90;
+  int DECIMAL = 91;
+  int DOT = 92;
+  int DOT_DOT = 93;
+  int DOT_DOT_LESS = 94;
+  int DOT_DOT_ASTERISK = 95;
+  int BUILT_IN = 96;
+  int EXISTS = 97;
+  int EQUALS = 98;
+  int DOUBLE_EQUALS = 99;
+  int NOT_EQUALS = 100;
+  int PLUS_EQUALS = 101;
+  int MINUS_EQUALS = 102;
+  int TIMES_EQUALS = 103;
+  int DIV_EQUALS = 104;
+  int MOD_EQUALS = 105;
+  int PLUS_PLUS = 106;
+  int MINUS_MINUS = 107;
+  int LESS_THAN = 108;
+  int LESS_THAN_EQUALS = 109;
+  int ESCAPED_GT = 110;
+  int ESCAPED_GTE = 111;
+  int PLUS = 112;
+  int MINUS = 113;
+  int TIMES = 114;
+  int DOUBLE_STAR = 115;
+  int ELLIPSIS = 116;
+  int DIVIDE = 117;
+  int PERCENT = 118;
+  int AND = 119;
+  int OR = 120;
+  int EXCLAM = 121;
+  int COMMA = 122;
+  int SEMICOLON = 123;
+  int COLON = 124;
+  int OPEN_BRACKET = 125;
+  int CLOSE_BRACKET = 126;
+  int OPEN_PAREN = 127;
+  int CLOSE_PAREN = 128;
+  int OPENING_CURLY_BRACKET = 129;
+  int CLOSING_CURLY_BRACKET = 130;
+  int IN = 131;
+  int AS = 132;
+  int USING = 133;
+  int ID = 134;
+  int OPEN_MISPLACED_INTERPOLATION = 135;
+  int NON_ESCAPED_ID_START_CHAR = 136;
+  int ESCAPED_ID_CHAR = 137;
+  int ID_START_CHAR = 138;
+  int ASCII_DIGIT = 139;
+  int DIRECTIVE_END = 140;
+  int EMPTY_DIRECTIVE_END = 141;
+  int NATURAL_GT = 142;
+  int NATURAL_GTE = 143;
+  int TERMINATING_WHITESPACE = 144;
+  int TERMINATING_EXCLAM = 145;
+  int TERSE_COMMENT_END = 146;
+  int MAYBE_END = 147;
+  int KEEP_GOING = 148;
+  int LONE_LESS_THAN_OR_DASH = 149;
 
   int DEFAULT = 0;
   int NODIRECTIVE = 1;
@@ -158,6 +169,8 @@ public interface FMParserConstants {
     "<IF>",
     "<ELSE_IF>",
     "<LIST>",
+    "<ITEMS>",
+    "<SEP>",
     "<FOREACH>",
     "<SWITCH>",
     "<CASE>",
@@ -180,6 +193,8 @@ public interface FMParserConstants {
     "<NOPARSE>",
     "<END_IF>",
     "<END_LIST>",
+    "<END_ITEMS>",
+    "<END_SEP>",
     "<END_RECOVER>",
     "<END_ATTEMPT>",
     "<END_FOREACH>",
@@ -221,12 +236,12 @@ public interface FMParserConstants {
     "\"${\"",
     "\"#{\"",
     "<WHITESPACE>",
-    "<token of kind 74>",
-    "<token of kind 75>",
+    "<token of kind 78>",
+    "<token of kind 79>",
     "\">\"",
     "\"]\"",
     "\"-\"",
-    "<token of kind 79>",
+    "<token of kind 83>",
     "<ESCAPED_CHAR>",
     "<STRING_LITERAL>",
     "<UNCLOSED_STRING_LITERAL>",
@@ -244,6 +259,13 @@ public interface FMParserConstants {
     "\"=\"",
     "\"==\"",
     "\"!=\"",
+    "\"+=\"",
+    "\"-=\"",
+    "\"*=\"",
+    "\"/=\"",
+    "\"%=\"",
+    "\"++\"",
+    "\"--\"",
     "<LESS_THAN>",
     "<LESS_THAN_EQUALS>",
     "<ESCAPED_GT>",

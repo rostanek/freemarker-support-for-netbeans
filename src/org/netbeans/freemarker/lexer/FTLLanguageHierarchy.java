@@ -34,6 +34,8 @@ public class FTLLanguageHierarchy extends LanguageHierarchy<FTLTokenId> {
                     new FTLTokenId("IF", "directive", FMParserConstants.IF),
                     new FTLTokenId("ELSE_IF", "directive", FMParserConstants.ELSE_IF),
                     new FTLTokenId("LIST", "directive", FMParserConstants.LIST),
+                    new FTLTokenId("ITEMS", "directive", FMParserConstants.ITEMS),
+                    new FTLTokenId("SEP", "directive", FMParserConstants.SEP),
                     new FTLTokenId("FOREACH", "directive", FMParserConstants.FOREACH), // deprecated
                     new FTLTokenId("SWITCH", "directive", FMParserConstants.SWITCH),
                     new FTLTokenId("CASE", "directive", FMParserConstants.CASE),
@@ -56,6 +58,8 @@ public class FTLLanguageHierarchy extends LanguageHierarchy<FTLTokenId> {
                     new FTLTokenId("NOPARSE", "directive", FMParserConstants.NOPARSE),
                     new FTLTokenId("END_IF", "directive", FMParserConstants.END_IF),
                     new FTLTokenId("END_LIST", "directive", FMParserConstants.END_LIST),
+                    new FTLTokenId("END_ITEMS", "directive", FMParserConstants.END_ITEMS),
+                    new FTLTokenId("END_SEP", "directive", FMParserConstants.END_SEP),
                     new FTLTokenId("END_RECOVER", "directive", FMParserConstants.END_RECOVER),
                     new FTLTokenId("END_ATTEMPT", "directive", FMParserConstants.END_ATTEMPT),
                     new FTLTokenId("END_FOREACH", "directive", FMParserConstants.END_FOREACH), // deprecated

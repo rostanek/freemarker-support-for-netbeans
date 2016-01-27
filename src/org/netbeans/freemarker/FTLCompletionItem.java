@@ -31,17 +31,43 @@ import org.openide.util.ImageUtilities;
 
 /**
  *
- * @author Rafał Ostanek
+ * @author rostanek
  */
 public class FTLCompletionItem implements CompletionItem {
 
+    static enum Type {
+
+        DIRECTIVE
+    }
+    private static Map<String, FTLCompletionDocumentation> docCache = new HashMap<String, FTLCompletionDocumentation>();
+    private static Map<String, String> dirMap = new HashMap<String, String>() {
+        {
+            put("recover", "attempt");
+            put("noescape", "escape");
+            put("noEscape", "escape");
+            put("noParse", "noparse");
+            put("return", "function");
+            put("else", "if");
+            put("elseif", "if");
+            put("elseIf", "if");
+            put("items", "list");
+            put("sep", "list");
+            put("nested", "macro");
+            put("case", "switch");
+            put("default", "switch");
+            put("break", "switch");
+            put("lt", "t");
+            put("rt", "t");
+        }
+    };
+
+    private Type type;
     private String text;
     private String suffix = "";
     private int caretOffset;
     private int dotOffset;
-    
-    private static ImageIcon fieldIcon =
-        new ImageIcon(ImageUtilities.loadImage("org/netbeans/freemarker/icon.png"));
+
+    private static ImageIcon fieldIcon = new ImageIcon(ImageUtilities.loadImage("org/netbeans/freemarker/icon.png"));
 
     public FTLCompletionItem(String text, int dotOffset, int caretOffset) {
         this.text = text;
@@ -54,6 +80,12 @@ public class FTLCompletionItem implements CompletionItem {
         this.suffix = suffix;
         this.caretOffset = caretOffset;
         this.dotOffset = dotOffset;
+    }
+
+    static FTLCompletionItem directive(String text, int dotOffset, int caretOffset) {
+        FTLCompletionItem item = new FTLCompletionItem(text, dotOffset, caretOffset);
+        item.type = Type.DIRECTIVE;
+        return item;
     }
 
     @Override
@@ -87,14 +119,17 @@ public class FTLCompletionItem implements CompletionItem {
 
     @Override
     public CompletionTask createDocumentationTask() {
-        return new AsyncCompletionTask(new AsyncCompletionQuery() {
+        if (type == Type.DIRECTIVE) {
+            return new AsyncCompletionTask(new AsyncCompletionQuery() {
 
-            @Override
-            protected void query(CompletionResultSet result, Document doc, int i) {
-                result.setDocumentation(new FTLCompletionDocumentation(FTLCompletionItem.this));
-                result.finish();
-            }
-        });
+                @Override
+                protected void query(CompletionResultSet result, Document doc, int i) {
+                    result.setDocumentation(FTLCompletionItem.getDocForDirective(text));
+                    result.finish();
+                }
+            });
+        }
+        return null;
     }
 
     @Override
@@ -121,60 +156,56 @@ public class FTLCompletionItem implements CompletionItem {
     public CharSequence getInsertPrefix() {
         return text;
     }
-    
-    public class FTLCompletionDocumentation implements CompletionDocumentation {
 
-        private FTLCompletionItem item;
+    private static FTLCompletionDocumentation getDocForDirective(String directive) {
+        String page = directive;
+        if (dirMap.containsKey(directive)) {
+            page = dirMap.get(directive);
+        }
+        if (!docCache.containsKey(page)) {
+            docCache.put(page, new FTLCompletionDocumentation(page));
+        }
+        return docCache.get(page);
+    }
+
+    public static class FTLCompletionDocumentation implements CompletionDocumentation {
+
         private URL url;
+        private String text;
 
-        public FTLCompletionDocumentation(FTLCompletionItem item) {
-            this.item = item;
-            Map<String, String> docs = new HashMap<String, String>();
-            docs.put("recover", "attempt");
-            docs.put("noescape", "escape");
-            docs.put("return", "function");
-            docs.put("else", "if");
-            docs.put("elseif", "if");
-            docs.put("nested", "macro");
-            docs.put("case", "switch");
-            docs.put("default", "switch");
-            docs.put("break", "switch");
-            docs.put("lt", "t");
-            docs.put("rt", "t");
+        public FTLCompletionDocumentation(String text) {
             try {
-                String page = item.text;
-                if (docs.containsKey(page)) {
-                    page = docs.get(page);
-                }
-                url = new URL("http://freemarker.org/docs/ref_directive_" + page + ".html");
+                url = new URL("http://freemarker.org/docs/ref_directive_" + text + ".html");
             } catch (MalformedURLException ex) {
                 url = null;
             }
         }
 
-        public FTLCompletionDocumentation(FTLCompletionItem item, URL url) {
-            this.item = item;
+        public FTLCompletionDocumentation(URL url) {
             this.url = url;
         }
 
         @Override
         public String getText() {
-            try {
-                InputStream in = url.openStream();
-                byte[] buffer = new byte[1024];
-                StringBuilder sb = new StringBuilder(16000);
-                while (in.read(buffer) > 0) {
-                    sb.append(new String(buffer));
+            if (text == null) {
+                // download documentation
+                try {
+                    InputStream in = url.openStream();
+                    byte[] buffer = new byte[1024];
+                    StringBuilder sb = new StringBuilder(16000);
+                    while (in.read(buffer) > 0) {
+                        sb.append(new String(buffer));
+                    }
+                    int start = sb.indexOf("<div class=\"page-content\">");
+                    int end = sb.indexOf("<div class=\"bottom-pagers-wrapper\">", start);
+                    if (start > 0 && end > 0) {
+                        text = sb.substring(start, end);
+                    }
+                } catch (IOException ex) {
+                    //Exceptions.printStackTrace(ex);
                 }
-                int start = sb.indexOf("<div class=\"page-content\">");
-                int end = sb.indexOf("<div class=\"bottom-pagers-wrapper\">", start);
-                if (start > 0 && end > 0) {
-                    return sb.substring(start, end);
-                }
-            } catch (IOException ex) {
-                //Exceptions.printStackTrace(ex);
             }
-            return null;
+            return text;
         }
 
         @Override
@@ -185,8 +216,11 @@ public class FTLCompletionItem implements CompletionItem {
         @Override
         public CompletionDocumentation resolveLink(String string) {
             if (!string.startsWith("#")) {
+                if (string.startsWith("ref_directive_")) {
+                    return FTLCompletionItem.getDocForDirective(string.substring(14, string.lastIndexOf(".")));
+                }
                 try {
-                    return new FTLCompletionDocumentation(item, new URL("http://freemarker.org/docs/" + string));
+                    return new FTLCompletionDocumentation(new URL("http://freemarker.org/docs/" + string));
                 } catch (MalformedURLException ex) {
                     //Exceptions.printStackTrace(ex);
                 }
@@ -198,6 +232,6 @@ public class FTLCompletionItem implements CompletionItem {
         public Action getGotoSourceAction() {
             return null;
         }
-        
+
     }
 }

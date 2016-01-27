@@ -25,6 +25,15 @@
                     </run-dependency>
                 </dependency>
                 <dependency>
+                    <code-name-base>org.netbeans.modules.editor</code-name-base>
+                    <build-prerequisite/>
+                    <compile-dependency/>
+                    <run-dependency>
+                        <release-version>3</release-version>
+                        <specification-version>1.79.1.5.22.43</specification-version>
+                    </run-dependency>
+                </dependency>
+                <dependency>
                     <code-name-base>org.netbeans.modules.editor.bracesmatching</code-name-base>
                     <build-prerequisite/>
                     <compile-dependency/>
@@ -52,12 +61,39 @@
                     </run-dependency>
                 </dependency>
                 <dependency>
+                    <code-name-base>org.netbeans.modules.editor.indent</code-name-base>
+                    <build-prerequisite/>
+                    <compile-dependency/>
+                    <run-dependency>
+                        <release-version>2</release-version>
+                        <specification-version>1.37.1</specification-version>
+                    </run-dependency>
+                </dependency>
+                <dependency>
+                    <code-name-base>org.netbeans.modules.editor.lib2</code-name-base>
+                    <build-prerequisite/>
+                    <compile-dependency/>
+                    <run-dependency>
+                        <release-version>1</release-version>
+                        <specification-version>1.85.1.43</specification-version>
+                    </run-dependency>
+                </dependency>
+                <dependency>
                     <code-name-base>org.netbeans.modules.editor.mimelookup</code-name-base>
                     <build-prerequisite/>
                     <compile-dependency/>
                     <run-dependency>
                         <release-version>1</release-version>
                         <specification-version>1.33.1</specification-version>
+                    </run-dependency>
+                </dependency>
+                <dependency>
+                    <code-name-base>org.netbeans.modules.editor.settings</code-name-base>
+                    <build-prerequisite/>
+                    <compile-dependency/>
+                    <run-dependency>
+                        <release-version>1</release-version>
+                        <specification-version>1.53.1</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -76,6 +112,15 @@
                     <run-dependency>
                         <release-version>2</release-version>
                         <specification-version>1.46.0.1</specification-version>
+                    </run-dependency>
+                </dependency>
+                <dependency>
+                    <code-name-base>org.netbeans.modules.options.api</code-name-base>
+                    <build-prerequisite/>
+                    <compile-dependency/>
+                    <run-dependency>
+                        <release-version>1</release-version>
+                        <specification-version>1.41.1</specification-version>
                     </run-dependency>
                 </dependency>
                 <dependency>
@@ -171,8 +216,8 @@
             </module-dependencies>
             <public-packages/>
             <class-path-extension>
-                <runtime-relative-path>ext/freemarker-2.3.22.jar</runtime-relative-path>
-                <binary-origin>release/modules/ext/freemarker-2.3.22.jar</binary-origin>
+                <runtime-relative-path>ext/freemarker-2.3.23.jar</runtime-relative-path>
+                <binary-origin>release/modules/ext/freemarker-2.3.23.jar</binary-origin>
             </class-path-extension>
         </data>
     </configuration>

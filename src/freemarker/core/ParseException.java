@@ -39,6 +39,7 @@ import freemarker.template.utility.StringUtil;
  * 
  * @see TokenMgrError
  */
+@SuppressWarnings({"deprecation", "rawtypes", "unchecked", "dep-ann"})
 public class ParseException extends IOException implements FMParserConstants {
 
     /**

@@ -1,12 +1,12 @@
 package org.netbeans.freemarker;
 
-import freemarker.core.FMParserConstants;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import javax.swing.text.AbstractDocument;
 
+import javax.swing.text.AbstractDocument;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 import javax.swing.text.Element;
@@ -14,15 +14,22 @@ import javax.swing.text.JTextComponent;
 import javax.swing.text.StyledDocument;
 
 import org.netbeans.api.editor.mimelookup.MimeRegistration;
+import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.api.lexer.Token;
 import org.netbeans.api.lexer.TokenHierarchy;
 import org.netbeans.api.lexer.TokenSequence;
+import org.netbeans.api.project.FileOwnerQuery;
+import org.netbeans.api.project.Project;
+import org.netbeans.modules.editor.NbEditorUtilities;
 import org.netbeans.spi.editor.completion.CompletionProvider;
 import org.netbeans.spi.editor.completion.CompletionResultSet;
 import org.netbeans.spi.editor.completion.CompletionTask;
 import org.netbeans.spi.editor.completion.support.AsyncCompletionQuery;
 import org.netbeans.spi.editor.completion.support.AsyncCompletionTask;
+import org.netbeans.spi.java.classpath.ClassPathProvider;
 import org.openide.util.Exceptions;
+
+import freemarker.core.FMParserConstants;
 
 /**
  *
@@ -52,27 +59,33 @@ public class FTLCompletionProvider implements CompletionProvider {
         return new AsyncCompletionTask(new AsyncCompletionQuery() {
             @Override
             protected void query(CompletionResultSet completionResultSet, Document document, int caretOffset) {
-                
+
                 int lineStartOffset;
                 String filter;
                 int startOffset = caretOffset - 1; // poczatek uzupelnianego slowa
                 String currentLine;
                 String text;
                 Set<String> idents = new HashSet<String>();
+                HashMap<String, Set<String>> variables = new HashMap<String, Set<String>>();
+
+                Token prevToken;
+                TokenSequence ts;
                 try {
                     ((AbstractDocument) document).readLock();
-                    
-                    TokenHierarchy th = TokenHierarchy.get(document);
-                    TokenSequence ts = th.tokenSequence();
+
+                    ts = TokenHierarchy.get(document).tokenSequence();
                     while (ts.moveNext()) {
                         Token token = ts.token();
                         if (token.id().ordinal() == FMParserConstants.ID) {
                             idents.add(token.text().toString());
                         }
                     }
-                    
-                    final StyledDocument bDoc = (StyledDocument) document;                    
-                    
+                    ts.move(caretOffset);
+                    ts.movePrevious();
+                    prevToken = ts.token();
+
+                    final StyledDocument bDoc = (StyledDocument) document;
+
                     text = bDoc.getText(0, bDoc.getLength());
                     lineStartOffset = getRowFirstNonWhite(bDoc, caretOffset); // poczatek bieżącej linii
                     currentLine = getCurrentLine(bDoc, caretOffset);
@@ -93,59 +106,67 @@ public class FTLCompletionProvider implements CompletionProvider {
                 } finally {
                     ((AbstractDocument) document).readUnlock();
                 }
-//                try {
-//                    String ftlvariable = "(<|\\[)#--\\s@ftlvariable\\sname=\"(\\w+)\"\\stype=\"([\\w\\.]+)\"\\s--(>|\\])";
-//                    Pattern ftlvarpattern = Pattern.compile(ftlvariable);
-//                    Matcher ftlvarmatcher = ftlvarpattern.matcher(text);
-//                    while (ftlvarmatcher.find()) {
-//                        String name = ftlvarmatcher.group(2);
-//                        String type = ftlvarmatcher.group(3);
-//                        Class<?> typeClass = Class.forName(type, false, getClass().getClassLoader());
-//                        for (java.lang.reflect.Field f : typeClass.getDeclaredFields()) {
-//                            System.out.println("Field: " + f.getName());
-//                        }
-//                    }
-//                } catch (Exception ex) {
-//                    ex.printStackTrace();
-//                }
-                if (filter.startsWith("<#") || filter.startsWith("[#")) {
-                    filter = filter.substring(2);
-                    for (String keyword : directives) {
-                        if (keyword.startsWith(filter)) {
-                            completionResultSet.addItem(FTLCompletionItem.directive(keyword, startOffset + 2, caretOffset));
+                try {
+                    Project project = FileOwnerQuery.getOwner(NbEditorUtilities.getFileObject(document));
+                    ClassPathProvider cpp = project.getLookup().lookup(ClassPathProvider.class);
+                    ClassPath cp = cpp.findClassPath(project.getProjectDirectory().getFileObject("src"), ClassPath.EXECUTE);
+
+                    String ftlvariable = "(<|\\[)#--\\s@ftlvariable\\sname=\"(\\w+)\"\\stype=\"((\\w+\\.)+\\w+)\"\\s--(>|\\])";
+                    Pattern ftlvarpattern = Pattern.compile(ftlvariable);
+                    Matcher ftlvarmatcher = ftlvarpattern.matcher(text);
+                    while (ftlvarmatcher.find()) {
+                        String name = ftlvarmatcher.group(2);
+                        String type = ftlvarmatcher.group(3);
+
+                        Set<String> varFields = variables.get(name);
+                        if (varFields == null) {
+                            varFields = new HashSet<String>();
+                            variables.put(name, varFields);
+                        }
+
+                        Class<?> typeClass = Class.forName(type, false, cp.getClassLoader(true));
+                        for (java.lang.reflect.Field f : typeClass.getDeclaredFields()) {
+                            varFields.add(f.getName());
                         }
                     }
-                } else if (filter.startsWith("<@") || filter.startsWith("[@")) {
-                    filter = filter.substring(2);
+                } catch (Exception ex) {
+                    //ex.printStackTrace();
+                }
+                // directives
+                if (currentLine.matches(".*(<|\\[)#\\w*")) {
+                    filter = currentLine.substring(currentLine.lastIndexOf("#") + 1);
+                    for (String keyword : directives) {
+                        if (keyword.startsWith(filter)) {
+                            completionResultSet.addItem(FTLCompletionItem.directive(keyword, caretOffset - filter.length(), caretOffset));
+                        }
+                    }
+                } else if (currentLine.matches(".*(<|\\[)@\\w*")) {
+                    // unified call
+                    filter = currentLine.substring(currentLine.lastIndexOf("@") + 1);
+                    Set<String> names = new HashSet<String>();
                     Pattern pattern = Pattern.compile("(<|\\[)#assign\\s+(\\w+)");
                     Matcher matcher = pattern.matcher(text);
                     while (matcher.find()) {
                         String name = matcher.group(2);
                         if (name.startsWith(filter)) {
-                            completionResultSet.addItem(new FTLCompletionItem(name, startOffset + 2, caretOffset));
+                            names.add(name);
                         }
                     }
                     pattern = Pattern.compile("(<|\\[)#import\\s.+\\sas\\s+(\\w+)");
                     matcher = pattern.matcher(text);
                     while (matcher.find()) {
-                        String hash = matcher.group(2);
-                        if (hash.startsWith(filter)) {
-                            completionResultSet.addItem(new FTLCompletionItem(hash, startOffset + 2, caretOffset));
+                        String name = matcher.group(2);
+                        if (name.startsWith(filter)) {
+                            names.add(name);
                         }
                     }
-                } else if (filter.endsWith("?")) {
-                    filter = filter.substring(1);
-                    for (String builtin : builtins) {
-                        if (builtin.startsWith(filter)) {
-                            completionResultSet.addItem(new FTLCompletionItem(builtin, startOffset + 1, caretOffset));
-                        }
+                    for (String name : names) {
+                        completionResultSet.addItem(new FTLCompletionItem(name, caretOffset - filter.length(), caretOffset));
                     }
-                }
-
-                if (currentLine.matches("(<|\\[)#ftl\\s+[a-z]*")) {
+                } else if (currentLine.matches("(<|\\[)#ftl\\s.*")) {
                     filter = currentLine.substring(currentLine.lastIndexOf(' ') + 1);
                     for (String param : ftlParameters) {
-                        if (param.startsWith(filter)) {
+                        if (param.startsWith(filter) && !currentLine.contains(param)) {
                             completionResultSet.addItem(new FTLCompletionItem(param, "=", startOffset, caretOffset));
                         }
                     }
@@ -157,19 +178,38 @@ public class FTLCompletionProvider implements CompletionProvider {
                         }
                     }
                 }
-                if (currentLine.matches(".*(<#|\\$\\{).*\\?[a-z_]*$")) { // builtins only inside interpolations or directives
+                if (currentLine.matches(".*(<#|\\$\\{)[^>}]*\\w+\\?\\w*$")) { // builtins only inside interpolations or directives
                     filter = currentLine.substring(currentLine.lastIndexOf("?") + 1);
                     for (String builtin : builtins) {
                         if (builtin.startsWith(filter)) {
-                            completionResultSet.addItem(new FTLCompletionItem(builtin, lineStartOffset + currentLine.lastIndexOf("?") + 1, caretOffset));
+                            completionResultSet.addItem(FTLCompletionItem.builtin(builtin, lineStartOffset + currentLine.lastIndexOf("?") + 1, caretOffset));
                         }
                     }
                 }
-                if (currentLine.matches(".*\\$\\{([a-z]*)")) {
+                if (currentLine.matches(".*\\$\\{(\\w*)")) {
                     filter = currentLine.substring(currentLine.lastIndexOf("{") + 1);
                     for (String ident : idents) {
                         if (ident.startsWith(filter)) {
                             completionResultSet.addItem(new FTLCompletionItem(ident, lineStartOffset + currentLine.lastIndexOf("{") + 1, caretOffset));
+                        }
+                    }
+                }
+                if (prevToken != null) {
+                    /*if (prevToken.id().ordinal() == FMParserConstants.DOLLAR_INTERPOLATION_OPENING) {
+                     for (String ident : idents) {
+                     if (ident.startsWith(filter)) {
+                     completionResultSet.addItem(new FTLCompletionItem(ident, caretOffset, caretOffset));
+                     }
+                     }
+                     }*/
+                    if (prevToken.id().ordinal() == FMParserConstants.DOT) {
+                        if (ts.movePrevious()) {
+                            Set<String> varFields = variables.get(ts.token().text().toString());
+                            if (varFields != null) {
+                                for (String field : varFields) {
+                                    completionResultSet.addItem(new FTLCompletionItem(field, caretOffset, caretOffset));
+                                }
+                            }
                         }
                     }
                 }
@@ -180,11 +220,15 @@ public class FTLCompletionProvider implements CompletionProvider {
 
     @Override
     public int getAutoQueryTypes(JTextComponent jtc, String string) {
+        if ("#@?".contains(string)) {
+            return COMPLETION_QUERY_TYPE;
+        }
         return 0;
     }
 
     /**
      * Gets current line as String, trimmed.
+     *
      * @param doc document
      * @param offset caret position
      * @return text from current line
@@ -229,7 +273,5 @@ public class FTLCompletionProvider implements CompletionProvider {
         }
         return -1;
     }
-    
-
 
 }

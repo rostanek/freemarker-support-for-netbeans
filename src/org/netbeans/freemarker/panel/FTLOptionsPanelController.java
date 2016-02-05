@@ -14,7 +14,7 @@ import org.openide.util.Lookup;
         keywords = "#AdvancedOption_Keywords_FTL",
         keywordsCategory = "Editor/FTL"
 )
-@org.openide.util.NbBundle.Messages({"AdvancedOption_DisplayName_FTL=Freemarker", "AdvancedOption_Keywords_FTL=freemarker"})
+@org.openide.util.NbBundle.Messages({"AdvancedOption_DisplayName_FTL=FreeMarker", "AdvancedOption_Keywords_FTL=freemarker"})
 public final class FTLOptionsPanelController extends OptionsPanelController {
 
     private FTLPanel panel;

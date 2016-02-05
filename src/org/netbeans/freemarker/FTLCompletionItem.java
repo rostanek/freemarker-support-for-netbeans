@@ -10,6 +10,8 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.swing.Action;
 import javax.swing.ImageIcon;
@@ -37,9 +39,11 @@ public class FTLCompletionItem implements CompletionItem {
 
     static enum Type {
 
-        DIRECTIVE
+        DIRECTIVE, BUILTIN
     }
     private static Map<String, FTLCompletionDocumentation> docCache = new HashMap<String, FTLCompletionDocumentation>();
+    private static Map<String, CompletionDocumentation> docCache2 = new HashMap<String, CompletionDocumentation>();
+
     private static Map<String, String> dirMap = new HashMap<String, String>() {
         {
             put("recover", "attempt");
@@ -88,6 +92,12 @@ public class FTLCompletionItem implements CompletionItem {
         return item;
     }
 
+    static FTLCompletionItem builtin(String text, int dotOffset, int caretOffset) {
+        FTLCompletionItem item = new FTLCompletionItem(text, dotOffset, caretOffset);
+        item.type = Type.BUILTIN;
+        return item;
+    }
+
     @Override
     public void defaultAction(JTextComponent jtc) {
         try {
@@ -119,12 +129,16 @@ public class FTLCompletionItem implements CompletionItem {
 
     @Override
     public CompletionTask createDocumentationTask() {
-        if (type == Type.DIRECTIVE) {
+        if (type != null) {
             return new AsyncCompletionTask(new AsyncCompletionQuery() {
 
                 @Override
                 protected void query(CompletionResultSet result, Document doc, int i) {
-                    result.setDocumentation(FTLCompletionItem.getDocForDirective(text));
+                    if (type == Type.DIRECTIVE) {
+                        result.setDocumentation(FTLCompletionItem.getDocForDirective(text));
+                    } else if (type == Type.BUILTIN) {
+                        result.setDocumentation(FTLCompletionItem.getDocForBuiltin(text));
+                    }
                     result.finish();
                 }
             });
@@ -168,6 +182,54 @@ public class FTLCompletionItem implements CompletionItem {
         return docCache.get(page);
     }
 
+    private static Map<String, String> builtinGroups;
+
+    private static CompletionDocumentation getDocForBuiltin(String builtin) {
+        if (builtinGroups == null) {
+            initBuiltins();
+        }
+        builtin = builtin.replaceAll("[A-Z]", "_$0").toLowerCase(); // camelCase to underscore_case
+        String page = builtinGroups.get(builtin);
+        if (!docCache2.containsKey(builtin)) {
+            docCache2.put(builtin, new BuiltinDocumentation(page));
+        }
+        return docCache2.get(builtin);
+    }
+
+    private static void initBuiltins() {
+        builtinGroups = new HashMap<String, String>();
+        try {
+            String content = download(new URL("http://freemarker.org/docs/ref_builtins_alphaidx.html"));
+            int start = content.indexOf("<ul>");
+            int end = content.indexOf("</ul>", start);
+            String index = content.substring(start, end);
+            Pattern pat = Pattern.compile(".*<a href=\"([A-Za-z_#\\.]+)\">([a-z_]+)</a>.*");
+            Matcher mat = pat.matcher(index);
+            while (mat.find()) {
+                String href = mat.group(1);
+                String name = mat.group(2);
+                builtinGroups.put(name, href);
+            }
+        } catch (IOException ex) {
+
+        }
+    }
+
+    private static String download(URL url) {
+        try {
+            InputStream in = url.openStream();
+            byte[] buffer = new byte[1024];
+            StringBuilder sb = new StringBuilder(16000);
+            while (in.read(buffer) > 0) {
+                sb.append(new String(buffer));
+            }
+            return sb.toString();
+        } catch (IOException ex) {
+            //Exceptions.printStackTrace(ex);
+        }
+        return "";
+    }
+
     public static class FTLCompletionDocumentation implements CompletionDocumentation {
 
         private URL url;
@@ -189,20 +251,11 @@ public class FTLCompletionItem implements CompletionItem {
         public String getText() {
             if (text == null) {
                 // download documentation
-                try {
-                    InputStream in = url.openStream();
-                    byte[] buffer = new byte[1024];
-                    StringBuilder sb = new StringBuilder(16000);
-                    while (in.read(buffer) > 0) {
-                        sb.append(new String(buffer));
-                    }
-                    int start = sb.indexOf("<div class=\"page-content\">");
-                    int end = sb.indexOf("<div class=\"bottom-pagers-wrapper\">", start);
-                    if (start > 0 && end > 0) {
-                        text = sb.substring(start, end);
-                    }
-                } catch (IOException ex) {
-                    //Exceptions.printStackTrace(ex);
+                String content = download(url);
+                int start = content.indexOf("<div class=\"page-content\">");
+                int end = content.indexOf("<div class=\"bottom-pagers-wrapper\">", start);
+                if (start > 0 && end > 0) {
+                    text = content.substring(start, end);
                 }
             }
             return text;
@@ -225,6 +278,51 @@ public class FTLCompletionItem implements CompletionItem {
                     //Exceptions.printStackTrace(ex);
                 }
             }
+            return null;
+        }
+
+        @Override
+        public Action getGotoSourceAction() {
+            return null;
+        }
+
+    }
+
+    public static class BuiltinDocumentation implements CompletionDocumentation {
+
+        private URL url;
+        private String text;
+
+        public BuiltinDocumentation(String page) {
+
+            try {
+                url = new URL("http://freemarker.org/docs/" + page);
+            } catch (MalformedURLException ex) {
+                url = null;
+            }
+        }
+
+        @Override
+        public String getText() {
+            if (text == null) {
+                // download documentation
+                String content = download(url);
+                int start = content.indexOf("<h2 class=\"content-header header-section2\" id=\"" + url.getRef());
+                int end = content.indexOf("<h2", start + 60);
+                if (start > 0 && end > 0) {
+                    text = content.substring(start, end);
+                }
+            }
+            return text;
+        }
+
+        @Override
+        public URL getURL() {
+            return url;
+        }
+
+        @Override
+        public CompletionDocumentation resolveLink(String string) {
             return null;
         }
 

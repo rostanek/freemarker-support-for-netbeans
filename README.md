@@ -1,4 +1,11 @@
 # freemarker-support-for-netbeans
-FreeMarker support for NetBeans including syntax coloring, parsing etc. new features will be added soon.
+FreeMarker (2.3.23) support for NetBeans IDE including:
+- syntax coloring
+- parsing with error highlighting
+- tags matching
+- occurences marking
+- configuration of embedded language (default is HTML)
+- code completion of: directives, built-ins, variables, ftl-tag parameters, setting-tag names
+- documentation of directives and built-ins above code completion
 
-I'm waiting for your feedback!
+![screenshot](example.png)

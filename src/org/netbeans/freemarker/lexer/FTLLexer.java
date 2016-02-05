@@ -58,16 +58,20 @@ class FTLLexer implements Lexer<FTLTokenId> {
                 debug(dn);
                 len = dn.length() + 2;
             } else if (msg.contains("is an existing directive")) {
-                String dn = msg.substring(0, msg.indexOf("is an"));
-                debug(dn);
-                len = dn.length();
+                //String dn = msg.substring(0, msg.indexOf("is an"));
+                //debug(dn);
+                //len = dn.length();
+                len = err.getEndColumnNumber() - err.getColumnNumber() + 2; // +1 to count length, +1 for <
+            } else if (msg.startsWith("Naming convention mismatch")) {
+                //String dn = msg.substring(len)"problematic token, ";
+                len = err.getEndColumnNumber() - err.getColumnNumber() + 1;
             }
             debug("fictional STATIC_TEXT_NON_WS token with length = " + len + " to recover");
             return info.tokenFactory().createToken(FTLLanguageHierarchy.getToken(FMParserConstants.STATIC_TEXT_NON_WS), len);
         }
         FTLTokenId tokenId = FTLLanguageHierarchy.getToken(token.kind);
-        //debug(token.beginLine + ":" + token.beginColumn + " " + token.endLine + ":" + token.endColumn);
-        //debug(tokenId + " " + token.image);
+        debug(token.beginLine + ":" + token.beginColumn + " " + token.endLine + ":" + token.endColumn);
+        debug(tokenId + " " + token.image);
         //if (info.input().readLength() < 1) {
         //    return null;
         //}
@@ -85,7 +89,7 @@ class FTLLexer implements Lexer<FTLTokenId> {
             token.image = token.image.substring(0, token.image.length() - 1);
         }
         int length = token.image.length();
-        //debug("length " + length + " readLength " + info.input().readLength());
+        debug("length " + length + " readLength " + info.input().readLength());
 
         return info.tokenFactory().createToken(tokenId, length);
     }
@@ -100,6 +104,6 @@ class FTLLexer implements Lexer<FTLTokenId> {
     }
 
 	private void debug(Object s) {
-		//System.out.println(s);
+		System.out.println(s);
 	}
 }

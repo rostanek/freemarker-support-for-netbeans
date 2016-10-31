@@ -12,6 +12,7 @@ import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectExistsException;
 import org.openide.loaders.MultiDataObject;
 import org.openide.loaders.MultiFileLoader;
+import org.openide.text.DataEditorSupport;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle.Messages;
 import org.openide.windows.TopComponent;
@@ -87,6 +88,7 @@ public class FTLDataObject extends MultiDataObject {
     public FTLDataObject(FileObject pf, MultiFileLoader loader) throws DataObjectExistsException, IOException {
         super(pf, loader);
         registerEditor("text/x-ftl", true);
+        getLookup().lookup(DataEditorSupport.class).setMIMEType("text/html");
     }
 
     @Override
